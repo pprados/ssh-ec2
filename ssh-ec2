@@ -1,0 +1,424 @@
+#!/usr/bin/env bash
+# This create can create a ephemeral AWS EC2 to execute an SSH script.
+# The script synchronize the current working directory before execute the SSH.
+# After the script, the data will be resynchronized back, and
+# the instance can be leave, stop or destroy.
+# The region must have a key with username, and the AWS user must have the privilege
+# to create and destroy some instances.
+# TODO: install jq (sudo apt-get install jq)
+
+# Author: Philippe PRADOS (ppr at octo.com)
+
+# Usage:
+# ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]
+# --terminate : create and start EC2, launch a command in ssh session, and remove EC2 instance and all datas after the end of ssh session.
+# --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
+# --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
+# --detach    : create and start EC2, launch a command in ssh session, detach the session, and leave EC2 instance alive
+# --attach    : create and start EC2, reattach a previous detached ssh session, and leave EC2 instance alive
+# --no-rsync  : Never synchronize files
+
+# Samples:
+# ./ssh-ec2 --terminate "cd myproject ; make train" # Return when finished
+# ./ssh-ec2 --detach "cd myproject ; make train" # Return immediately, then
+# ./ssh-ec2 --detach "while sleep 1; do echo thinking; done"
+# ./ssh-ec2 --attach # Attach to running process
+
+# Environment:
+# - USER              : tag will be created with username
+# - TRIGRAMME         : user trigramme (optional)
+# - AWS_PEM           : PEM file path to connect to AWS with SSH
+#                       or add your key with ssh-add ~/.ssh/id_rsa
+#                       or use -i pemfile.pem in command line (optional if the key was added with ssh-add)
+# - AWS_KEY_NAME      : Pair key name in AWS. default $USER
+# - AWS_IMAGE_NAME    : Name of image. Default: "Deep Learning AMI (Ubuntu) Version *"
+# - AWS_IMAGE_ID      : ami-image. Default: Search with $AWS_IMAGE
+# - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
+# - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
+# - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: <current working directory>-$AWS_KEY_NAME
+# - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
+# - AWS_INSTANCE_USER : default user name in image (default:Calculated with the AWS_IMAGE_NAME)
+# - AWS_FINAL_STATE   : Final state. Must be leave, destroy or stop. Default: destroy
+# - TERM_MULTIPLEX    : tmux (default) or screen
+# If the AWS_FINAL_STATE is leave, a screen is detached in the remote device.
+# You can reattach with `./ssh-ec2 -a`
+
+# File
+# - .rsyncignore      : list of directories to ignore when rsync files
+
+shopt -s extglob
+
+if  [[ "$(which aws)" == ""  ]]; then
+    echo "Install AWS CLI before use ssh-ec2 (https://tinyurl.com/yd4ru2nu)"
+    exit 1
+fi
+
+_DEFAULT_FINAL_STATE=terminate
+_DEFAULT_REGION=eu-central-1
+_DEFAULT_INSTANCE_TYPE=p2.xlarge
+_DEFAULT_MULTIPLEX=tmux
+_DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
+_DEFAULT_IAM_INSTANCE_PROFILE="S3FullAccessRoleForEC2"
+#_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+
+nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+declare -A TAGS # The user can set somme additional tags
+
+while true; do
+    case "$1" in
+      -l|--leave)
+        AWS_FINAL_STATE=leave
+        shift
+        ;;
+      -s|--stop)
+        AWS_FINAL_STATE=stop
+        shift
+        ;;
+      -t|--terminate)
+        AWS_FINAL_STATE=terminate
+        shift
+        ;;
+      -d|--detach)
+        AWS_FINAL_STATE=leave
+        SSH_DETACH=y
+        shift
+        ;;
+      -a|--attach)
+        AWS_FINAL_STATE=leave
+        SSH_REATTACH=y
+        shift
+        ;;
+      -L)
+        SSH_PARAMS="${SSH_PARAMS} -L $2"
+        shift 2
+        ;;
+      -R)
+        SSH_PARAMS="${SSH_PARAMS} -R $2"
+        shift 2
+        ;;
+      -i)
+        PEM_SSH=-i $2
+        shift 2
+        ;;
+      --no-rsync)
+        NO_RSYNC=y
+        shift
+        ;;
+      -*)
+        echo "unknown parameter $1"
+        exit 1
+        ;;
+      * )
+        break
+        ;;
+  esac
+done
+shopt -s nocasematch
+
+DEBUG=y
+if [[ "${DEBUG}" == y ]]; then
+  #TERM_MULTIPLEX=tmux
+  #AWS_DRY= --dryrun
+  AWS_INSTANCE_TYPE=t2.small
+  #AWS_INSTANCE_TYPE=t2.medium
+  #AWS_IMAGE_NAME="Amazon Linux AMI*"
+
+  if [[ -z "$AWS_FINAL_STATE" ]]; then
+    AWS_FINAL_STATE=leave
+  fi
+  NO_RSYNC=y
+fi
+
+CWBD=$(basename "$(pwd)")
+AWS_KEY_NAME=${AWS_KEY_NAME=${USER}}
+AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${CWBD}-${AWS_KEY_NAME}}
+AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
+AWS_IAM_INSTANCE_PROFILE=${AWS_IAM_INSTANCE_PROFILE=${_DEFAULT_IAM_INSTANCE_PROFILE}}
+if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
+    AWS_IAM_INSTANCE_PROFILE="--iam-instance-profile Name=${AWS_IAM_INSTANCE_PROFILE}"
+else
+    AWS_IAM_INSTANCE_PROFILE=""
+fi
+if [ -e ~/.aws/config ];  then
+    default_region=$(cat ~/.aws/config | grep region | cut -d '=' -f 2)
+else
+    default_region=${_DEFAULT_REGION}
+fi
+AWS_REGION=$(echo ${AWS_DEFAULT_REGION=${default_region}} | tr -d '[:space:]')
+
+AWS_IMAGE_NAME=${AWS_IMAGE_NAME=${_DEFAULT_IMAGE_NAME}}
+AWS_LAST_KNOW_IMAGE_ID=$(aws --region ${AWS_REGION} ec2 describe-images \
+  --filters "Name=name,Values=${AWS_IMAGE_NAME}"  \
+  --output json | jq -r '.Images | sort_by(.CreationDate) | last(.[]).ImageId')
+AWS_IMAGE_ID=${AWS_IMAGE_ID=${AWS_LAST_KNOW_IMAGE_ID}}
+check=${AWS_IMAGE_ID?Image not found in the region ${AWS_REGION}}
+
+# Try to find the default username
+# See https://alestic.com/2014/01/ec2-ssh-username/
+declare -A _default_user
+_default_user["Amazon Linux"]="ec2-user"
+_default_user["ubuntu"]="ubuntu"
+_default_user["RHEL 6.[0-3]"]="root"
+_default_user["RHEL 6.[0-9]+"]="ec2-user"
+_default_user["Fedora"]="fedora"
+_default_user["Centos"]="centos"
+_default_user["SUSE"]="ec2-user"
+_default_user["BitNami"]="bitnami"
+_default_user["TurnKey"]="root"
+_default_user["NanoStack"]="ubuntu"
+_default_user["FreeBSD"]="ec2-user"
+_default_user["OmniOS"]="root"
+
+if [[ -z "${AWS_INSTANCE_USER}" ]]; then
+    for K in "${!_default_user[@]}"; do
+        if [[ "${AWS_IMAGE_NAME}" =~ "${K}" ]] ; then
+            AWS_INSTANCE_USER=${_default_user[${K}]}
+            break
+        fi
+    done
+fi
+
+if [[ "${AWS_IMAGE_NAME}" =~ "ubuntu" ]] ; then
+AWS_INSTANCE_USER=${AWS_INSTANCE_USER=ubuntu}
+elif [[ "${AWS_IMAGE_NAME}" =~ "Amazon Linux" ]] ; then
+AWS_INSTANCE_USER=${AWS_INSTANCE_USER=ubuntu}
+fi
+
+AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE=${_DEFAULT_INSTANCE_TYPE}}
+
+TERM_MULTIPLEX=${TERM_MULTIPLEX=${_DEFAULT_MULTIPLEX}}
+
+declare -A TAGS
+TAGS["Name"]="${AWS_NAME_INSTANCE}"
+TAGS["User"]="${USER}"
+TAGS["hostname"]="$(hostname)"
+if [ ! -z "${TRIGRAMME}" ] ; then
+  TAGS["Trigramme"]="${TRIGRAMME}"
+fi
+
+
+_TAGS="["
+__tags=""
+for K in "${!TAGS[@]}"; do
+  _TAGS="${_TAGS}{Key=${K},Value=${TAGS[${K}]}},"
+  __tags="${__tags}${K}=${TAGS[${K}]}, "
+done
+_TAGS=${_TAGS%*,}"]"
+__tags=${__tags%*, }
+
+AWS_TAGS="ResourceType=instance,Tags=$_TAGS"
+AWS_FINAL_STATE=${AWS_FINAL_STATE=${_DEFAULT_FINAL_STATE}}
+AWS_USER_DATA=${AWS_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2)"}
+AWS_DISABLE_HOST_CHECKING="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet"
+
+
+if [[ ! -z "${AWS_PEM}" ]]; then
+PEM_SSH="-i ${AWS_PEM}"
+fi
+
+echo "----------------------------------------"
+echo "EC2 Name: ${AWS_NAME_INSTANCE}"
+echo "Region:   ${AWS_REGION}"
+echo "Type:     ${AWS_INSTANCE_TYPE}"
+echo "Image Id: ${AWS_IMAGE_ID} (${AWS_IMAGE_NAME})"
+echo "Key name: ${AWS_KEY_NAME}"
+echo "Tags:     ${__tags}"
+echo "----------------------------------------"
+
+function finish() {
+    trap - EXIT
+    trap exit INT
+
+    # Check last instance
+    nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+
+    # Only the last instance of ssh manage the final state
+    if [[ "${nb_of_instance}" < 3 ]] ; then
+        # Stop the instance
+        case "${AWS_FINAL_STATE}" in
+            stop)
+              echo -e "\e[33mStop instance...\e[0m \c"
+              aws --region ${AWS_REGION} ec2 stop-instances --instance-ids ${AWS_INSTANCE_ID} ${AWS_DRY} --output text ${AWS_DRY} > /dev/null
+              if [[ -z "${AWS_DRY}" ]]; then
+                  while STATE=$(aws --region ${AWS_REGION} ec2 describe-instances \
+                      --instance-ids $AWS_INSTANCE_ID \
+                      --output text \
+                      --query 'Reservations[*].Instances[*].State.Name');
+                    test "$STATE" != "stopped" -a "$STATE" != "terminated"; do
+                    sleep 3;
+                  done;
+                  echo -e "\e[33mdone\e[0m"
+              fi
+              ;;
+            terminate)
+                echo -e "\e[32mTerminate instance... \e[0m\c"
+                aws --region ${AWS_REGION} ec2 terminate-instances --instance-ids ${AWS_INSTANCE_ID} ${AWS_DRY} --output text ${AWS_DRY} > /dev/null
+                while STATE=$(aws --region ${AWS_REGION} ec2 describe-instances \
+                    --instance-ids $AWS_INSTANCE_ID \
+                    --output text \
+                    --query 'Reservations[*].Instances[*].State.Name');
+                  test "$STATE" != "terminated"; do
+                  sleep 3;
+                done;
+                echo -e "\e[32mand security group... \e[0m\c"
+                aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_NAME_INSTANCE}
+                echo -e "\e[32mdone\e[0m"
+                ;;
+            *)
+                if [[ $nb_of_instance > 2 ]] ; then
+                    AWS_FINAL_STATE=leave
+                    echo -e "\e[91mWARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active\e[0m"
+                else
+                    echo -e "\e[91mWARNING: The AWS EC instance ${AWS_NAME_INSTANCE} is alive\e[0m" >&2
+                fi
+                ;;
+        esac
+    fi
+}
+
+trap finish EXIT
+
+# Search instance
+AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 describe-instances \
+  --filters "Name=tag:Name,Values=${AWS_NAME_INSTANCE}" \
+    "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+   --query 'Reservations[*].Instances[*].InstanceId' --output text)
+
+if [[ -z "$AWS_INSTANCE_ID" ]]; then
+    echo ""
+    # Create instance
+    AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 describe-security-groups \
+      --group-names ppr-tensorflow \
+      --query 'SecurityGroups[*].GroupId' \
+      --output text 2>/dev/null)
+    if [[ -z "${AWS_SECURITY_GROUP_ID}" ]]; then
+        echo -e "Creating new AWS EC2 security group... \c"
+        AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 create-security-group \
+          --group-name ${AWS_NAME_INSTANCE} \
+          --description "Security group for ${AWS_NAME_INSTANCE}" \
+          ${AWS_DRY} \
+          --output text 2>/dev/null)
+        echo -e "with port 22 open... \c"
+        # TODO: check secu
+        # TODO: add IAM group
+        aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
+          --group-name ${AWS_NAME_INSTANCE} \
+          --protocol tcp --port 22 \
+          --cidr 0.0.0.0/0 \
+          ${AWS_DRY} 2>&1 >/dev/null
+        echo -e "done"
+    fi
+
+    echo -e "Creating new AWS EC2 instance... \c"
+    case "${AWS_FINAL_STATE}" in
+        leave|terminate)
+            shutdown_mode=terminate
+            ;;
+        stop)
+            shutdown_mode=stop
+            ;;
+    esac
+
+    AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 run-instances \
+      --region ${AWS_REGION}  \
+      --instance-type ${AWS_INSTANCE_TYPE} \
+      ${AWS_IAM_INSTANCE_PROFILE} \
+      --security-groups ${AWS_NAME_INSTANCE} \
+      --tag-specifications "${AWS_TAGS}" \
+      --image-id ${AWS_IMAGE_ID} \
+      --key-name ${AWS_KEY_NAME} \
+      --instance-initiated-shutdown-behavior ${shutdown_mode} \
+      --user-data "${AWS_USER_DATA}" \
+      --output text --query 'Instances[*].InstanceId')
+
+    echo -e "starting... \c"
+    aws --region ${AWS_REGION} ec2 wait instance-status-ok --instance-ids ${AWS_INSTANCE_ID}
+    echo -e "done"
+fi
+STATE=$(aws --region ${AWS_REGION} ec2 describe-instances --instance-ids $AWS_INSTANCE_ID --output text --query 'Reservations[*].Instances[*].State.Name')
+if [ "$STATE" == "stopping" -o "$STATE" == "stopped" ]; then
+    echo ""
+    echo -e "Start instance... \c"
+      while STATE=$(aws --region ${AWS_REGION} ec2 describe-instances \
+          --instance-ids $AWS_INSTANCE_ID \
+          --output text \
+          --query 'Reservations[*].Instances[*].State.Name');
+        test "$STATE" != "stopped"; do
+        sleep 3;
+      done;
+    aws --region ${AWS_REGION} ec2 start-instances --instance-ids $AWS_INSTANCE_ID ${AWS_DRY} >/dev/null
+    aws --region ${AWS_REGION} ec2 wait instance-running --instance-ids ${AWS_INSTANCE_ID}
+    echo -e "done"
+fi
+
+# Synchronize files with the new instance
+aws --region ${AWS_REGION} ec2 wait instance-running --instance-ids ${AWS_INSTANCE_ID}
+AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instances \
+  --instance-ids $AWS_INSTANCE_ID \
+  --output text \
+  --query 'Reservations[*].Instances[*].NetworkInterfaces[*].Association.PublicIp')
+
+if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
+    echo -e "Start synchronization (except files in .rsyncignore)... \c"
+    sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vz \
+      -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
+      ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
+      --quiet \
+      --archive \
+      --modify-window=3 \
+      --update \
+      --copy-links
+    echo -e "done"
+fi
+
+_CMD="$*"
+
+case "${TERM_MULTIPLEX}" in
+    screen)
+        _TERM=-t
+        if [[ "$AWS_FINAL_STATE" == detach ]]; then
+        _CMD="screen -dmS ${AWS_NAME_INSTANCE} $_CMD"
+        else
+        _CMD="screen -mS ${AWS_NAME_INSTANCE} $_CMD"
+        fi
+        ;;
+    tmux)
+        _TERM=-t
+        if [[ "$AWS_FINAL_STATE" == detach || -z "$_CMD" ]]; then
+        # "tmux attach-session -t ${AWS_NAME_INSTANCE}"
+        _CMD="tmux ; $_CMD"
+        else
+        #_CMD="tmux -c \"$_CMD\""
+        _CMD="tmux new-session -d -s ${AWS_NAME_INSTANCE} \"$_CMD\" \; attach"
+        fi
+        ;;
+esac
+
+if [[ ${SSH_REATTACH} == y ]]; then
+    case "${TERM_MULTIPLEX}" in
+      screen)tt
+          _TERM=-t
+          _CMD="screen -rmS ${AWS_NAME_INSTANCE}"
+          ;;
+      tmux)
+          _TERM=-t
+          _CMD="tmux a -t ${AWS_NAME_INSTANCE} || tmux ; "
+          ;;
+    esac
+fi
+( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
+# Refresh nb_of_instance
+nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+
+# Reverce synchronisation
+if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
+    echo -e "Synchronize result... \c"
+    sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vza \
+      -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
+      ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
+      --quiet \
+      --update \
+      $([ "$AWS_DRY" != "" ] && echo "-n" ) \
+      --ignore-times
+    echo -e "done"
+fi
