@@ -15,7 +15,6 @@
 # --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
 # --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
 # --detach    : create and start EC2, launch a command in ssh session, detach the session, and leave EC2 instance alive
-# --attach    : create and start EC2, reattach a previous detached ssh session, and leave EC2 instance alive
 # --no-rsync  : Never synchronize files
 # --quiet     : Silent when rsync files
 # --no-quiet  : Print synchronized files when rsync
@@ -24,7 +23,6 @@
 # ./ssh-ec2 --terminate "source activate cntk_p36 ; make train" # Return when finished
 # ./ssh-ec2 --detach    "source activate cntk_p36 ; make train" # Return immediately, then
 # ./ssh-ec2 --detach    "while sleep 1; do echo thinking; done"
-# ./ssh-ec2 --attach # Attach to running process
 
 # Environment:
 # - USER              : tag will be created with username
@@ -41,17 +39,22 @@
 # - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
 # - AWS_INSTANCE_USER : default user name in image (default:Calculate with the AWS_IMAGE_NAME)
 # - AWS_FINAL_STATE   : Final state. Must be leave, destroy or stop. Default: destroy
-# - MULTIPLEX         : tmux (default) or screen or empty
+# - MULTIPLEX         : tmux (default) or screen or empty (setmuxe http://hyperpolyglot.org/multiplexers)
 # If the AWS_FINAL_STATE is leave, a screen is detached in the remote device.
 # You can reattach with `./ssh-ec2 -a`
 
 # File
-# - .rsyncignore      : list of directories to ignore when rsync files
+# - .rsyncignore      : list of directories to ignore when synchronize files with rsync
 
 shopt -s extglob
 
 if  [[ "$(which aws)" == ""  ]]; then
-    echo "Install AWS CLI before use ssh-ec2 (https://tinyurl.com/yd4ru2nu)"
+    echo "ERROR: Install AWS CLI before use ssh-ec2 (https://tinyurl.com/yd4ru2nu)" >&2
+    exit 1
+fi
+
+if  [[ "$(which jq)" == ""  ]]; then
+    echo "ERROR: Install jq before use ssh-ec2" >&2
     exit 1
 fi
 
@@ -62,7 +65,6 @@ _DEFAULT_MULTIPLEX=tmux
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
 #_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"  # FIXME
 _DEFAULT_IAM_INSTANCE_PROFILE="S3FullAccessRoleForEC2"
-#_DEFAULT_IAM_INSTANCE_PROFILE="" # FIXME
 _DEFAULT_QUIET=--quiet
 
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
@@ -85,11 +87,6 @@ while true; do
       -d|--detach)
         AWS_FINAL_STATE=leave
         SSH_DETACH=y
-        shift
-        ;;
-      -a|--attach)
-        AWS_FINAL_STATE=leave
-        SSH_REATTACH=y
         shift
         ;;
       -L)
@@ -117,7 +114,7 @@ while true; do
         shift
         ;;
       --help)
-        echo "ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]"
+        echo "ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]"
         exit 0
         ;;
       -*)
@@ -131,7 +128,7 @@ while true; do
 done
 shopt -s nocasematch
 
-DEBUG=n
+DEBUG=y
 if [[ "${DEBUG}" == y ]]; then
   #MULTIPLEX=tmux
   #AWS_DRY= --dryrun
@@ -152,8 +149,12 @@ if [[ -z "${TRIGRAM}" ]] ; then
 else
   PREFIX=${TRIGRAM}
 fi
-AWS_NAME_INSTANCE ?=${AWS_NAME_INSTANCE=${PREFIX}-${CWBD}}
-AWS_RSYNC_DIR ?=${AWS_RSYNC_DIR=${CWBD}}
+if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
+  AWS_NAME_INSTANCE=${PREFIX}-${CWBD}
+fi
+
+AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE}}
+AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
 AWS_IAM_INSTANCE_PROFILE=${AWS_IAM_INSTANCE_PROFILE=${_DEFAULT_IAM_INSTANCE_PROFILE}}
 if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
     AWS_IAM_INSTANCE_PROFILE="--iam-instance-profile Name=${AWS_IAM_INSTANCE_PROFILE}"
@@ -389,6 +390,15 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
 
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
+#    rsync -vz \
+#      -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
+#      ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
+#      --exclude-from .rsyncignore \
+#      --archive \
+#      --modify-window=1 \
+#      --update \
+#      ${QUIET} \
+#      --copy-links
     sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vz \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
@@ -406,48 +416,50 @@ _CMD="$*"
 case "${MULTIPLEX}" in
     screen)
         _TERM=-t
-        if [[ "$AWS_FINAL_STATE" == detach ]]; then
-        _CMD="${_CD} ; screen -dmS ${AWS_NAME_INSTANCE} $_CMD"
+        if [[ "$SSH_DETACH" == y ]]; then
+            _CMD="${_CD} ; screen -dmS ${AWS_NAME_INSTANCE} '$_CMD'"
         else
-        _CMD="${_CD} ; screen -mS ${AWS_NAME_INSTANCE} $_CMD"
+            if [ -z "$_CMD" ] ; then
+                _TERM=-t
+                _CMD="${_CD} ; screen -rS ${AWS_NAME_INSTANCE} || screen -S ${AWS_NAME_INSTANCE}"
+            else
+                _TERM=-t
+                _CMD="${_CD} ; screen -S ${AWS_NAME_INSTANCE} $SHELL -c '$_CMD'"
+            fi
         fi
         ;;
     tmux)
         _TERM=-t
-        if [[ "$AWS_FINAL_STATE" == detach || -z "$_CMD" ]]; then
-        # "tmux attach-session -t ${AWS_NAME_INSTANCE}"
-        _CMD="${_CD} ; tmux ; $_CMD"
+        # ./ssh-ec2 --detach 'for ((;;)); do echo "break"; sleep 2; done'
+        if [[ "$SSH_DETACH" == y ]]; then
+            _CMD="${_CD} ; tmux new-session -s ${AWS_NAME_INSTANCE} -d '$_CMD'"
         else
-        #_CMD="tmux -c \"$_CMD\""
-        _CMD="${_CD} ; tmux new-session -d -s ${AWS_NAME_INSTANCE} \"$_CMD\" \; attach"
+            #_CMD="tmux new-session -s ${AWS_NAME_INSTANCE} '$_CMD""'"
+            if [ -z "$_CMD" ] ; then
+              _TERM=-t
+              _CMD="${_CD} ; tmux a -t ${AWS_NAME_INSTANCE} || tmux new-session -s ${AWS_NAME_INSTANCE} "
+            else
+                _TERM=-t
+                _CMD="${_CD} ; tmux new-session -s ${AWS_NAME_INSTANCE} '$_CMD'"
+            fi
         fi
         ;;
       *)
+        if [[ "$SSH_DETACH" == y ]]; then
+            echo "ERROR: Impossible to detach session without MULTIPLEX" >&2
+            exit 1
+        else
           _TERM=-t
           if [ -z "$_CMD" ] ; then
             _CMD="${_CD} ; exec \$SHELL"
           else
+            _TERM=-t
             _CMD="${_CD} ; ${_CMD}"
           fi
-          ;;
+        fi
+        ;;
 esac
 
-if [[ ${SSH_REATTACH} == y ]]; then
-    case "${MULTIPLEX}" in
-      screen)tt
-          _TERM=-t
-          _CMD="screen -rmS ${AWS_NAME_INSTANCE}"
-          ;;
-      tmux)
-          _TERM=-t
-          _CMD="tmux a -t ${AWS_NAME_INSTANCE} || tmux ; "
-          ;;
-      *)
-          _TERM=-t
-          ;;
-
-    esac
-fi
 ( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
 # Refresh nb_of_instance
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
