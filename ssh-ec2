@@ -1,45 +1,47 @@
 #!/usr/bin/env bash
-# This create can create a ephemeral AWS EC2 to execute an SSH script.
+# This create a ephemeral AWS EC2 instance to execute an SSH script.
 # The script synchronize the current working directory before execute the SSH.
-# After the script, the data will be resynchronized back, and
+# After the SSH session, the data will be resynchronized back, and
 # the instance can be leave, stop or destroy.
-# The region must have a key with username, and the AWS user must have the privilege
+# The selected region MUST have a key with username, and the AWS user MUST have the privilege
 # to create and destroy some instances.
 # TODO: install jq (sudo apt-get install jq)
 
 # Author: Philippe PRADOS (ppr at octo.com)
 
 # Usage:
-# ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]
+# ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [--quiet] [-i <pem file>] [-[LR] port:host:port] [cmds*]
 # --terminate : create and start EC2, launch a command in ssh session, and remove EC2 instance and all datas after the end of ssh session.
 # --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
 # --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
 # --detach    : create and start EC2, launch a command in ssh session, detach the session, and leave EC2 instance alive
 # --attach    : create and start EC2, reattach a previous detached ssh session, and leave EC2 instance alive
 # --no-rsync  : Never synchronize files
+# --quiet     : Silent when rsync files
+# --no-quiet  : Print synchronized files when rsync
 
 # Samples:
-# ./ssh-ec2 --terminate "cd myproject ; make train" # Return when finished
-# ./ssh-ec2 --detach "cd myproject ; make train" # Return immediately, then
-# ./ssh-ec2 --detach "while sleep 1; do echo thinking; done"
+# ./ssh-ec2 --terminate "source activate cntk_p36 ; make train" # Return when finished
+# ./ssh-ec2 --detach    "source activate cntk_p36 ; make train" # Return immediately, then
+# ./ssh-ec2 --detach    "while sleep 1; do echo thinking; done"
 # ./ssh-ec2 --attach # Attach to running process
 
 # Environment:
 # - USER              : tag will be created with username
-# - TRIGRAMME         : user trigramme (optional)
+# - TRIGRAM           : user trigram (optional)
 # - AWS_PEM           : PEM file path to connect to AWS with SSH
 #                       or add your key with ssh-add ~/.ssh/id_rsa
 #                       or use -i pemfile.pem in command line (optional if the key was added with ssh-add)
 # - AWS_KEY_NAME      : Pair key name in AWS. default $USER
 # - AWS_IMAGE_NAME    : Name of image. Default: "Deep Learning AMI (Ubuntu) Version *"
-# - AWS_IMAGE_ID      : ami-image. Default: Search with $AWS_IMAGE
+# - AWS_IMAGE_ID      : ami-image. Default: Search with $AWS_IMAGE_NAME
 # - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
 # - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
-# - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: <current working directory>-$AWS_KEY_NAME
+# - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: $AWS_KEY_NAME-<current working directory>-$AWS_KEY_NAME
 # - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
-# - AWS_INSTANCE_USER : default user name in image (default:Calculated with the AWS_IMAGE_NAME)
+# - AWS_INSTANCE_USER : default user name in image (default:Calculate with the AWS_IMAGE_NAME)
 # - AWS_FINAL_STATE   : Final state. Must be leave, destroy or stop. Default: destroy
-# - TERM_MULTIPLEX    : tmux (default) or screen
+# - MULTIPLEX         : tmux (default) or screen or empty
 # If the AWS_FINAL_STATE is leave, a screen is detached in the remote device.
 # You can reattach with `./ssh-ec2 -a`
 
@@ -58,12 +60,14 @@ _DEFAULT_REGION=eu-central-1
 _DEFAULT_INSTANCE_TYPE=p2.xlarge
 _DEFAULT_MULTIPLEX=tmux
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
+#_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"  # FIXME
 _DEFAULT_IAM_INSTANCE_PROFILE="S3FullAccessRoleForEC2"
-#_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+#_DEFAULT_IAM_INSTANCE_PROFILE="" # FIXME
+_DEFAULT_QUIET=--quiet
 
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 declare -A TAGS # The user can set somme additional tags
-
+QUIET=${_DEFAULT_QUIET}
 while true; do
     case "$1" in
       -l|--leave)
@@ -100,9 +104,21 @@ while true; do
         PEM_SSH=-i $2
         shift 2
         ;;
-      --no-rsync)
+      --no-rsync) # TODO: no-rsync-in and no-rsync-out
         NO_RSYNC=y
         shift
+        ;;
+      --quiet)
+        QUIET=--quiet
+        shift
+        ;;
+      --no-quiet)
+        QUIET=
+        shift
+        ;;
+      --help)
+        echo "ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]"
+        exit 0
         ;;
       -*)
         echo "unknown parameter $1"
@@ -115,9 +131,9 @@ while true; do
 done
 shopt -s nocasematch
 
-DEBUG=y
+DEBUG=n
 if [[ "${DEBUG}" == y ]]; then
-  #TERM_MULTIPLEX=tmux
+  #MULTIPLEX=tmux
   #AWS_DRY= --dryrun
   AWS_INSTANCE_TYPE=t2.small
   #AWS_INSTANCE_TYPE=t2.medium
@@ -131,8 +147,13 @@ fi
 
 CWBD=$(basename "$(pwd)")
 AWS_KEY_NAME=${AWS_KEY_NAME=${USER}}
-AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${CWBD}-${AWS_KEY_NAME}}
-AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
+if [[ -z "${TRIGRAM}" ]] ; then
+  PREFIX=${AWS_KEY_NAME}
+else
+  PREFIX=${TRIGRAM}
+fi
+AWS_NAME_INSTANCE ?=${AWS_NAME_INSTANCE=${PREFIX}-${CWBD}}
+AWS_RSYNC_DIR ?=${AWS_RSYNC_DIR=${CWBD}}
 AWS_IAM_INSTANCE_PROFILE=${AWS_IAM_INSTANCE_PROFILE=${_DEFAULT_IAM_INSTANCE_PROFILE}}
 if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
     AWS_IAM_INSTANCE_PROFILE="--iam-instance-profile Name=${AWS_IAM_INSTANCE_PROFILE}"
@@ -186,14 +207,14 @@ fi
 
 AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE=${_DEFAULT_INSTANCE_TYPE}}
 
-TERM_MULTIPLEX=${TERM_MULTIPLEX=${_DEFAULT_MULTIPLEX}}
+MULTIPLEX=${MULTIPLEX=${_DEFAULT_MULTIPLEX}}
 
 declare -A TAGS
 TAGS["Name"]="${AWS_NAME_INSTANCE}"
 TAGS["User"]="${USER}"
-TAGS["hostname"]="$(hostname)"
-if [ ! -z "${TRIGRAMME}" ] ; then
-  TAGS["Trigramme"]="${TRIGRAMME}"
+TAGS["Hostname"]="$(hostname)"
+if [ ! -z "${TRIGRAM}" ] ; then
+  TAGS["Trigram"]="${TRIGRAM}"
 fi
 
 
@@ -216,18 +237,25 @@ if [[ ! -z "${AWS_PEM}" ]]; then
 PEM_SSH="-i ${AWS_PEM}"
 fi
 
-echo "----------------------------------------"
+echo "----------------------------------------------------------"
 echo "EC2 Name: ${AWS_NAME_INSTANCE}"
 echo "Region:   ${AWS_REGION}"
 echo "Type:     ${AWS_INSTANCE_TYPE}"
 echo "Image Id: ${AWS_IMAGE_ID} (${AWS_IMAGE_NAME})"
 echo "Key name: ${AWS_KEY_NAME}"
 echo "Tags:     ${__tags}"
-echo "----------------------------------------"
+echo "----------------------------------------------------------"
+
+trap_with_arg() {
+    func="$1" ; shift
+    for sig ; do
+        trap "$func $sig" "$sig"
+    done
+}
 
 function finish() {
     trap - EXIT
-    trap exit INT
+    trap_with_arg exit INT
 
     # Check last instance
     nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
@@ -274,9 +302,12 @@ function finish() {
                 ;;
         esac
     fi
+    if [ ! "$1" == "EXIT" ] ; then
+        exit -1 ;
+    fi
 }
 
-trap finish EXIT
+trap_with_arg finish EXIT
 
 # Search instance
 AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 describe-instances \
@@ -299,13 +330,11 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
           ${AWS_DRY} \
           --output text 2>/dev/null)
         echo -e "with port 22 open... \c"
-        # TODO: check secu
-        # TODO: add IAM group
-        aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
+       aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
           --group-name ${AWS_NAME_INSTANCE} \
           --protocol tcp --port 22 \
           --cidr 0.0.0.0/0 \
-          ${AWS_DRY} 2>&1 >/dev/null
+          ${AWS_DRY} >/dev/null  2>&1
         echo -e "done"
     fi
 
@@ -359,43 +388,52 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
   --query 'Reservations[*].Instances[*].NetworkInterfaces[*].Association.PublicIp')
 
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
-    echo -e "Start synchronization (except files in .rsyncignore)... \c"
+    echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vz \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
-      --quiet \
       --archive \
-      --modify-window=3 \
+      --modify-window=1 \
       --update \
+      ${QUIET} \
       --copy-links
     echo -e "done"
 fi
 
+_CD="[ -e \"${AWS_RSYNC_DIR}\" ] && cd \"${AWS_RSYNC_DIR}\""
 _CMD="$*"
 
-case "${TERM_MULTIPLEX}" in
+case "${MULTIPLEX}" in
     screen)
         _TERM=-t
         if [[ "$AWS_FINAL_STATE" == detach ]]; then
-        _CMD="screen -dmS ${AWS_NAME_INSTANCE} $_CMD"
+        _CMD="${_CD} ; screen -dmS ${AWS_NAME_INSTANCE} $_CMD"
         else
-        _CMD="screen -mS ${AWS_NAME_INSTANCE} $_CMD"
+        _CMD="${_CD} ; screen -mS ${AWS_NAME_INSTANCE} $_CMD"
         fi
         ;;
     tmux)
         _TERM=-t
         if [[ "$AWS_FINAL_STATE" == detach || -z "$_CMD" ]]; then
         # "tmux attach-session -t ${AWS_NAME_INSTANCE}"
-        _CMD="tmux ; $_CMD"
+        _CMD="${_CD} ; tmux ; $_CMD"
         else
         #_CMD="tmux -c \"$_CMD\""
-        _CMD="tmux new-session -d -s ${AWS_NAME_INSTANCE} \"$_CMD\" \; attach"
+        _CMD="${_CD} ; tmux new-session -d -s ${AWS_NAME_INSTANCE} \"$_CMD\" \; attach"
         fi
         ;;
+      *)
+          _TERM=-t
+          if [ -z "$_CMD" ] ; then
+            _CMD="${_CD} ; exec \$SHELL"
+          else
+            _CMD="${_CD} ; ${_CMD}"
+          fi
+          ;;
 esac
 
 if [[ ${SSH_REATTACH} == y ]]; then
-    case "${TERM_MULTIPLEX}" in
+    case "${MULTIPLEX}" in
       screen)tt
           _TERM=-t
           _CMD="screen -rmS ${AWS_NAME_INSTANCE}"
@@ -404,6 +442,10 @@ if [[ ${SSH_REATTACH} == y ]]; then
           _TERM=-t
           _CMD="tmux a -t ${AWS_NAME_INSTANCE} || tmux ; "
           ;;
+      *)
+          _TERM=-t
+          ;;
+
     esac
 fi
 ( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
@@ -412,7 +454,7 @@ nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 
 # Reverce synchronisation
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
-    echo -e "Synchronize result... \c"
+    echo -e "Synchronizes result... \c"
     sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vza \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
@@ -422,3 +464,4 @@ if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
       --ignore-times
     echo -e "done"
 fi
+exit 0
