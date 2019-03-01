@@ -139,7 +139,7 @@ if [[ "${DEBUG}" == y ]]; then
   if [[ -z "$AWS_FINAL_STATE" ]]; then
     AWS_FINAL_STATE=leave
   fi
-  NO_RSYNC=y
+  #NO_RSYNC=y
 fi
 
 CWBD=$(basename "$(pwd)")
@@ -390,16 +390,8 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
 
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
-#    rsync -vz \
-#      -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
-#      ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
-#      --exclude-from .rsyncignore \
-#      --archive \
-#      --modify-window=1 \
-#      --update \
-#      ${QUIET} \
-#      --copy-links
-    sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vz \
+    [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
+    echo $EXCLUDE | xargs rsync -vz \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
       --archive \
@@ -407,7 +399,7 @@ if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
       --update \
       ${QUIET} \
       --copy-links
-    echo -e "done"
+    read -p "..."
 fi
 
 _CD="[ -e \"${AWS_RSYNC_DIR}\" ] && cd \"${AWS_RSYNC_DIR}\""
@@ -467,7 +459,8 @@ nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 # Reverce synchronisation
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
     echo -e "Synchronizes result... \c"
-    sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore | xargs rsync -vza \
+    [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
+    echo $EXCLUDE | xargs rsync -vza \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
       --quiet \
