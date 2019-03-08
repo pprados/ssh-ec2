@@ -95,6 +95,11 @@ while true; do
         ;;
       -a|--attach)
         MULTIPLEX=tmux
+        NO_RSYNC=y
+        shift
+        ;;
+      --finish)
+        MULTIPLEX=tmux
         shift
         ;;
       --multi|--multiplex)
@@ -130,6 +135,13 @@ while true; do
         echo -e "ssh-ec2 [-lsrd|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] \\ \n" \
             "[--multi <tmux|screen|none>] \\ \n" \
             "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
+        echo "Samples:"
+        echo "ssh-ec2 make          # Create, sync, execute, sync and terminate instance"
+        echo "ssh-ec2 --detach make # Create, sync, execute in bg and detach session"
+        echo "ssh-ec2 --attach      # Attach current session"
+        echo "ssh-ec2 --finish      # Attach, rsync and terminate instance EC2"
+        echo "ssh-ec2 --stop make   # Create, sync, execute, sync and save instance EC2"
+        echo "ssh-ec2 --leave       # Create, sync, execute"
         exit 0
         ;;
       -*)
@@ -143,9 +155,8 @@ while true; do
 done
 shopt -s nocasematch
 
-DEBUG=y
+DEBUG=n
 if [[ "${DEBUG}" == y ]]; then
-  #MULTIPLEX=tmux
   #AWS_DRY= --dryrun
   AWS_INSTANCE_TYPE=t2.small
   #AWS_INSTANCE_TYPE=t2.medium
@@ -414,7 +425,6 @@ if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
       --update \
       ${QUIET} \
       --copy-links
-    read -p "..."
 fi
 
 _CD="[ -e \"${AWS_RSYNC_DIR}\" ] && cd \"${AWS_RSYNC_DIR}\""
@@ -467,6 +477,7 @@ case "${MULTIPLEX}" in
         ;;
 esac
 
+echo "ssh ${AWS_HOST} ..."
 ( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
 # Refresh nb_of_instance
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )

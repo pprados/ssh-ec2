@@ -1,4 +1,3 @@
-aws s3 ls s3://ppr-ssh-ec2
 # ssh-ec2
 Un utilitaire déporter les calculs des data-scientistes sur AWS.
 
@@ -44,14 +43,19 @@ Les ressources accessibles peuvent être restreintes si besoins.
      
 - Des rôles, pour le service **EC2**, a associer aux instances qui seront construites par `ssh-ec2`.
 Par exemple:
-    - Un role [EC2ReadOnlyAccessToS3](EC2ReadOnlyAccessToS3.png), pour le service **EC2**, 
+    - Un role [EC2ReadOnlyAccessToS3](./EC2ReadOnlyAccessToS3.png), pour le service **EC2**, 
     avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
+    ![AmazonEC2ReadOnlyAccess](./EC2ReadOnlyAccessToS3.png?raw=true "EC2ReadOnlyAccessToS3")
     - Un role [EC2FullAccessToS3](EC2FullAccessToS3.png), pour le service **EC2**, 
     avec la stratégie `AmazonEC2FullAccess`
+    ![EC2FullAccessToS3](./EC2FullAccessToS3.png?raw=true "EC2FullAccessToS3")
     - Un role pour le service EC2, limité aux certains _buckets_
     - ...
 - créer un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
-puis y associer les utilisateurs habilité à utiliser le service.
+![CreateNewGroup](./CreateNewGroup.png?raw=true "CreateNewGroup")
+- puis y associer les utilisateurs habilité à utiliser le service.
+![AssociateGroups](./AssociateGroups.png?raw=true "AssociateGroups")
+
 
 ## Pré-requis sur AWS pour l'utilisateur
 L'utilisateur de `ssh-ec2` doit :
@@ -62,7 +66,7 @@ L'utilisateur de `ssh-ec2` doit :
 export TRIGRAM=PPR
 ```
 - installer une clé SSH valide avec le nom du trigram dans les différentes régions.
-A défaut, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé  
+A défaut, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environement `AWS_KEY_NAME`.
 
 
@@ -77,7 +81,7 @@ Voici les valeurs par défaut des principaux paramètres proposé pour l'outil.
 | Region          | eu-central-1                |
 | Type d'instance | p2.xlarge                   |
 | Image           | Deep Learning AMI (Ubuntu)* |
-| Profile         | EC2ReadOnlyAccess           |
+| Profile         | EC2ReadOnlyAccessToS3       |
 
 
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
@@ -113,11 +117,22 @@ un appel avec --attach permet de se rattacher au terminal
 ```bash
 ssh-ec2 --attach 
 ```
-Suivant l'utilitaire de multiplexage, il faut utiliser `Ctrl-B d` (tmux) ou `Ctrl-A d` pour
+Suivant l'utilitaire de multiplexage, il faut utiliser `Ctrl-B d` (tmux) ou `Ctrl-A d` (screen) pour
 se détacher de la session en la laissant vivante. Référez-vous à la documentation
 de ces outils pour en savoir plus.
 `ssh-ec2` se charge d'utiliser au mieux ces outils. 
 Par défaut, lors de l'invocation avec un `--detach`, `tmux` est utilisé.
+
+Pour récupérer les fichiers d'une instance détaché, il faut s'y connecter sans `--attach`, par exemple
+
+| Objectif                                                              | Procédure               |
+|-----------------------------------------------------------------------|-------------------------|
+| Lancer un `make` et attendre le résultat pour continuer               | `ssh-ec2 make`          |
+| Lancer un `make` et le laisser continuer détaché                      | `ssh-ec2 --detach make` |
+| Jeter un oeil sur un traitement détaché                               | `ssh-ec2 --attach`      |
+| Récupérer le résultat d'un `make` détaché puis termine l'instance EC2 | `ssh-ec2 --finish`      |
+| Lancer un `make` puis sauver l'état de l'instance et l'arreter        | `ssh-ec2 --stop make`   |
+| Lancer une session SSH sur une instance et la garder vivante          | `ssh-ec2 --leave`       |
 
 ### Synchronisation
 Parfois, il n'est pas nécessaire de synchroniser les fichiers. 
