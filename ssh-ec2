@@ -6,6 +6,7 @@
 # The selected region MUST have a key with username, and the AWS user MUST have the privilege
 # to create and destroy some instances.
 # TODO: install jq (sudo apt-get install jq)
+# TODO: add set -e
 
 # Author: Philippe PRADOS (ppr at octo.com)
 
@@ -13,16 +14,18 @@
 # ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [--quiet] [-i <pem file>] [-[LR] port:host:port] [cmds*]
 # --terminate : create and start EC2, launch a command in ssh session, and remove EC2 instance and all datas after the end of ssh session.
 # --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
-# --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
+# --leave     : create a$SSH_DETACHnd start EC2, launch a command in ssh session, and leave EC2 instance alive
 # --detach    : create and start EC2, launch a command in ssh session, detach the session, and leave EC2 instance alive
+# --attach    : attach a session
 # --no-rsync  : Never synchronize files
 # --quiet     : Silent when rsync files
 # --no-quiet  : Print synchronized files when rsync
 
 # Samples:
 # ./ssh-ec2 --terminate "source activate cntk_p36 ; make train" # Return when finished
-# ./ssh-ec2 --detach    "source activate cntk_p36 ; make train" # Return immediately, then
+# ./ssh-ec2 --detach    "source activate cntk_p36 ; make train" # Return immediately
 # ./ssh-ec2 --detach    "while sleep 1; do echo thinking; done"
+# ./ssh-ec2 --attach    "while sleep 1; do echo thinking; done"
 
 # Environment:
 # - USER              : tag will be created with username
@@ -61,10 +64,10 @@ fi
 _DEFAULT_FINAL_STATE=terminate
 _DEFAULT_REGION=eu-central-1
 _DEFAULT_INSTANCE_TYPE=p2.xlarge
-_DEFAULT_MULTIPLEX=tmux
+_DEFAULT_MULTIPLEX=
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
 #_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"  # FIXME
-_DEFAULT_IAM_INSTANCE_PROFILE="S3FullAccessRoleForEC2"
+_DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
 _DEFAULT_QUIET=--quiet
 
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
@@ -87,7 +90,17 @@ while true; do
       -d|--detach)
         AWS_FINAL_STATE=leave
         SSH_DETACH=y
+        [ -z "$MULTIPLEX" ] && MULTIPLEX=tmux
         shift
+        ;;
+      -a|--attach)
+        MULTIPLEX=tmux
+        shift
+        ;;
+      --multi|--multiplex)
+        MULTIPLEX=$2
+        [ "$MULTIPLEX" == none ] && MULTIPLEX=""
+        shift 2
         ;;
       -L)
         SSH_PARAMS="${SSH_PARAMS} -L $2"
@@ -114,7 +127,9 @@ while true; do
         shift
         ;;
       --help)
-        echo "ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach] [--no-rsync] [-i <pem file>] [-[LR] port:host:port] [cmds*]"
+        echo -e "ssh-ec2 [-lsrd|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] \\ \n" \
+            "[--multi <tmux|screen|none>] \\ \n" \
+            "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
         exit 0
         ;;
       -*)
@@ -139,7 +154,7 @@ if [[ "${DEBUG}" == y ]]; then
   if [[ -z "$AWS_FINAL_STATE" ]]; then
     AWS_FINAL_STATE=leave
   fi
-  #NO_RSYNC=y
+  NO_RSYNC=y
 fi
 
 CWBD=$(basename "$(pwd)")
@@ -360,7 +375,6 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
       --instance-initiated-shutdown-behavior ${shutdown_mode} \
       --user-data "${AWS_USER_DATA}" \
       --output text --query 'Instances[*].InstanceId')
-
     echo -e "starting... \c"
     aws --region ${AWS_REGION} ec2 wait instance-status-ok --instance-ids ${AWS_INSTANCE_ID}
     echo -e "done"
@@ -391,6 +405,7 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
+    # TODO: use file and add with --exclude-from ???
     echo $EXCLUDE | xargs rsync -vz \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
