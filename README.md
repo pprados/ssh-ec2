@@ -72,12 +72,14 @@ ou via la ligne de commande.
 
 Voici les valeurs par défaut des principaux paramètres proposé pour l'outil.
 
-+-----------------+-----------------------------+
+| Paramètre       | Valeur par défaut           |
+|:----------------|:----------------------------|
 | Region          | eu-central-1                |
 | Type d'instance | p2.xlarge                   |
 | Image           | Deep Learning AMI (Ubuntu)* |
 | Profile         | EC2ReadOnlyAccess           |
-+-----------------+-----------------------------+
+
+
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
 
 Pour avoir un rapide rappel des paramètres de la ligne de commande :
@@ -105,7 +107,6 @@ ssh-ec2 --terminate "source activate cntk_p36 ; make train" # Sauve et arrète l
 
 Il est possible de lancer une commande, et de détacher imédiatement le terminal. L'instance reste vivante.
 ```bash
-# FIXME
 ssh-ec2 --detach    "while sleep 1; do echo thinking; done" # Return immediately
 ```
 un appel avec --attach permet de se rattacher au terminal
@@ -137,8 +138,8 @@ en avoir besoin.
 
 Pour résumer
 
-|Paramètre|Impact|
-+:-------------+:----------------------------------------------------------------------------------------------+
+| Paramètre    | Impact                                                                                        |
+|:-------------|:----------------------------------------------------------------------------------------------|
 | _rien_       | Lance un session SSH                                                                          |
 | --help       | Affiche un rapide rappel des paramètres                                                       |
 | --terminate  | Supprime l'instance EC2 après la session SSH (par défaut)                                     |
@@ -150,7 +151,6 @@ Pour résumer
 | -R<p:host:p> | transfert un port distant sur un port localdistant de l'instance, le temps de la session SSH. |
 | --no-rsync   | Ne synchronise pas les fichiers du répertoire local avant le traitement, ni après.            |
 | --no-quiet   | Affiche les fichiers synchronisés                                                             |
-+:-------------+:----------------------------------------------------------------------------------------------+
 
 ## Utilisation dans un Makefile
 Il suffit de quelques recettes complémentaires dans un fichier Makefile pour pouvoir exécuter
