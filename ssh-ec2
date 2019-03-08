@@ -14,7 +14,7 @@
 # ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [--quiet] [-i <pem file>] [-[LR] port:host:port] [cmds*]
 # --terminate : create and start EC2, launch a command in ssh session, and remove EC2 instance and all datas after the end of ssh session.
 # --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
-# --leave     : create a$SSH_DETACHnd start EC2, launch a command in ssh session, and leave EC2 instance alive
+# --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
 # --detach    : create and start EC2, launch a command in ssh session, detach the session, and leave EC2 instance alive
 # --attach    : attach a session
 # --no-rsync  : Never synchronize files
@@ -95,11 +95,15 @@ while true; do
         ;;
       -a|--attach)
         MULTIPLEX=tmux
-        NO_RSYNC=y
+        AWS_FINAL_STATE=leave
+        NO_RSYNC_BEGIN=y
+        NO_RSYNC_END=y
         shift
         ;;
-      --finish)
+      -f|--finish)
         MULTIPLEX=tmux
+        NO_RSYNC_BEGIN=n
+        NO_RSYNC_END=y
         shift
         ;;
       --multi|--multiplex)
@@ -120,7 +124,8 @@ while true; do
         shift 2
         ;;
       --no-rsync) # TODO: no-rsync-in and no-rsync-out
-        NO_RSYNC=y
+        NO_RSYNC_BEGIN=n
+        NO_RSYNC_END=y
         shift
         ;;
       --quiet)
@@ -132,7 +137,7 @@ while true; do
         shift
         ;;
       --help)
-        echo -e "ssh-ec2 [-lsrd|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] \\ \n" \
+        echo -e "ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \\ \n" \
             "[--multi <tmux|screen|none>] \\ \n" \
             "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
         echo "Samples:"
@@ -165,7 +170,8 @@ if [[ "${DEBUG}" == y ]]; then
   if [[ -z "$AWS_FINAL_STATE" ]]; then
     AWS_FINAL_STATE=leave
   fi
-  NO_RSYNC=y
+  NO_RSYNC_BEGIN=y
+  NO_RSYNC_END=y
 fi
 
 CWBD=$(basename "$(pwd)")
@@ -413,7 +419,7 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
   --output text \
   --query 'Reservations[*].Instances[*].NetworkInterfaces[*].Association.PublicIp')
 
-if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
+if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
     # TODO: use file and add with --exclude-from ???
@@ -477,13 +483,15 @@ case "${MULTIPLEX}" in
         ;;
 esac
 
+echo ""
 echo "ssh ${AWS_HOST} ..."
-( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
+#( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
+ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}"
 # Refresh nb_of_instance
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 
 # Reverce synchronisation
-if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC}" ]] ; then
+if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
     [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
     echo $EXCLUDE | xargs rsync -vza \
