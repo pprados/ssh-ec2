@@ -52,9 +52,9 @@ Par exemple:
     ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2FullAccessToS3.png)
     - Un role pour le service EC2, limité aux certains _buckets_
     - ...
-- créer un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
+- un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
 ![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateNewGroup.png)
-- puis y associer les utilisateurs habilité à utiliser l'outil.
+- puis y associer les utilisateurs habilités à utiliser l'outil.
 ![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/AssociateGroups.png)
 
 
@@ -78,12 +78,12 @@ Le programme est paramétrable via la ligne de commande ou à l'aide de variable
 
 Voici les valeurs par défaut des principaux paramètres proposé par l'outil.
 
-| Paramètre       | Valeur par défaut           |
-|:----------------|:----------------------------|
-| Region          | eu-central-1                |
-| Type d'instance | p2.xlarge                   |
-| Image           | Deep Learning AMI (Ubuntu)* |
-| Profile         | EC2ReadOnlyAccessToS3       |
+| Paramètre                           | Valeur par défaut           |
+|:------------------------------------|:----------------------------|
+| Region (AWS_REGION)                 | eu-central-1                |
+| Type d'instance (AWS_INSTANCE_TYPE) | p2.xlarge                   |
+| Image (AWS_IMAGE_NAME)              | Deep Learning AMI (Ubuntu)* |
+| Profile (AWS_IAM_INSTANCE_PROFILE)  | EC2ReadOnlyAccessToS3       |
 
 
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
@@ -236,7 +236,7 @@ Les recettes doivent compléter l'environement si nécessaire.
 Il est conseiller de rédiger des règles capables de le détecter
 pour installer le nécessaire avant le traitement.
 
-Consultez les exemples [de Makefile ici](TODO) pour Python.
+Consultez les exemples [de Makefile ici](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true) pour Python.
 
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.
