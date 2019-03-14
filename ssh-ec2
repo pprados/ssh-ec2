@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# This create a ephemeral AWS EC2 instance to execute an SSH script.
+# Create a ephemeral AWS EC2 instance to execute an SSH command.
+#
 # The script synchronize the current working directory before execute the SSH.
 # After the SSH session, the data will be resynchronized back, and
-# the instance can be leave, stop or destroy.
-# The selected region MUST have a key with username, and the AWS user MUST have the privilege
-# to create and destroy some instances.
-# TODO: install jq (sudo apt-get install jq)
-# TODO: add set -e
+# the instance can be leave, stop or terminate.
+# The selected region MUST have a key-pair with username, and the AWS user MUST have the privilege
+# to create and destroy instances.
+#
+# Author: Philippe PRADOS (ppr@octo.com)
 
-# Author: Philippe PRADOS (ppr at octo.com)
-
-# Usage:
-# ./ssh-ec2 [-lsrda|--leave|--stop|--terminate|--detach|--attach] [--no-rsync] [--quiet] [-i <pem file>] [-[LR] port:host:port] [cmds*]
+# Usage (See README.md):
+# ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \
+# [--multi <tmux|screen|none>] \
+# [-i <pem file>] [-[LR] port:host:port] [cmds*]
+#
 # --terminate : create and start EC2, launch a command in ssh session, and remove EC2 instance and all datas after the end of ssh session.
 # --stop      : create and start EC2, launch a command in ssh session, and stop EC2 instance after the end of ssh session.
 # --leave     : create and start EC2, launch a command in ssh session, and leave EC2 instance alive
@@ -19,7 +21,7 @@
 # --attach    : attach a session
 # --no-rsync  : Never synchronize files
 # --quiet     : Silent when rsync files
-# --no-quiet  : Print synchronized files when rsync
+# --verbose   : Print synchronized files when rsync
 
 # Samples:
 # ./ssh-ec2 --terminate "source activate cntk_p36 ; make train" # Return when finished
@@ -49,7 +51,26 @@
 # File
 # - .rsyncignore      : list of directories to ignore when synchronize files with rsync
 
+set -e # Detect all errors
 shopt -s extglob
+
+# ---------------- For debug ----------------
+DEBUG=n
+if [[ "${DEBUG}" == y ]]; then
+  #AWS_DRY= --dryrun
+  AWS_INSTANCE_TYPE=t2.small
+  #AWS_INSTANCE_TYPE=t2.medium
+  #AWS_IMAGE_NAME="Amazon Linux AMI*"
+
+  if [[ -z "$AWS_FINAL_STATE" ]]; then
+    AWS_FINAL_STATE=leave
+  fi
+  #NO_RSYNC_BEGIN=y
+  #NO_RSYNC_END=y
+fi
+# ---------------- End For debug ----------------
+
+
 
 if  [[ "$(which aws)" == ""  ]]; then
     echo "ERROR: Install AWS CLI before use ssh-ec2 (https://tinyurl.com/yd4ru2nu)" >&2
@@ -68,122 +89,185 @@ _DEFAULT_MULTIPLEX=
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
 #_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"  # FIXME
 _DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
-_DEFAULT_QUIET=--quiet
+_DEFAULT_RSYNC_QUIET=--quiet
 
 nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 declare -A TAGS # The user can set somme additional tags
-QUIET=${_DEFAULT_QUIET}
-while true; do
-    case "$1" in
-      -l|--leave)
-        AWS_FINAL_STATE=leave
-        shift
-        ;;
-      -s|--stop)
-        AWS_FINAL_STATE=stop
-        shift
-        ;;
-      -t|--terminate)
-        AWS_FINAL_STATE=terminate
-        shift
-        ;;
-      -d|--detach)
-        AWS_FINAL_STATE=leave
-        SSH_DETACH=y
-        [ -z "$MULTIPLEX" ] && MULTIPLEX=tmux
-        shift
-        ;;
-      -a|--attach)
-        MULTIPLEX=tmux
-        AWS_FINAL_STATE=leave
-        NO_RSYNC_BEGIN=y
-        NO_RSYNC_END=y
-        shift
-        ;;
-      -f|--finish)
-        MULTIPLEX=tmux
-        NO_RSYNC_BEGIN=n
-        NO_RSYNC_END=y
-        shift
-        ;;
-      --multi|--multiplex)
-        MULTIPLEX=$2
-        [ "$MULTIPLEX" == none ] && MULTIPLEX=""
-        shift 2
-        ;;
-      -L)
-        SSH_PARAMS="${SSH_PARAMS} -L $2"
-        shift 2
-        ;;
-      -R)
-        SSH_PARAMS="${SSH_PARAMS} -R $2"
-        shift 2
-        ;;
-      -i)
-        PEM_SSH=-i $2
-        shift 2
-        ;;
-      --no-rsync) # TODO: no-rsync-in and no-rsync-out
-        NO_RSYNC_BEGIN=n
-        NO_RSYNC_END=y
-        shift
-        ;;
-      --quiet)
-        QUIET=--quiet
-        shift
-        ;;
-      --no-quiet)
-        QUIET=
-        shift
-        ;;
-      --help)
-        echo -e "ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \\ \n" \
-            "[--multi <tmux|screen|none>] \\ \n" \
-            "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
-        echo "Samples:"
-        echo "ssh-ec2 make          # Create, sync, execute, sync and terminate instance"
-        echo "ssh-ec2 --detach make # Create, sync, execute in bg and detach session"
-        echo "ssh-ec2 --attach      # Attach current session"
-        echo "ssh-ec2 --finish      # Attach, rsync and terminate instance EC2"
-        echo "ssh-ec2 --stop make   # Create, sync, execute, sync and save instance EC2"
-        echo "ssh-ec2 --leave       # Create, sync, execute"
-        exit 0
-        ;;
-      -*)
-        echo "unknown parameter $1"
-        exit 1
-        ;;
-      * )
-        break
-        ;;
-  esac
+RSYNC_QUIET=${_DEFAULT_RSYNC_QUIET}
+
+# --- Analyse parameters
+
+function arg_leave() {
+    AWS_FINAL_STATE=leave
+}
+
+function arg_stop() {
+    AWS_FINAL_STATE=stop
+}
+
+function arg_terminate() {
+    AWS_FINAL_STATE=terminate
+}
+
+function arg_detach() {
+    AWS_FINAL_STATE=leave
+    SSH_DETACH=y
+    [ -z "$MULTIPLEX" ] && MULTIPLEX=tmux
+}
+
+function arg_attach() {
+    MULTIPLEX=tmux
+    AWS_FINAL_STATE=leave
+    NO_RSYNC_BEGIN=y
+    NO_RSYNC_END=y
+}
+
+function arg_finish() {
+    MULTIPLEX=tmux
+    NO_RSYNC_BEGIN=y
+}
+
+function arg_multiplex() {
+    MULTIPLEX=$2
+    [ "$MULTIPLEX" == none ] && MULTIPLEX=""
+}
+
+function arg_L() {
+    SSH_PARAMS="${SSH_PARAMS} -L $1"
+}
+
+function arg_R() {
+    SSH_PARAMS="${SSH_PARAMS} -R $1"
+}
+
+function arg_i() {
+    PEM_SSH=-i $1
+}
+
+function arg_no_rsync() {
+    NO_RSYNC_BEGIN=y
+    NO_RSYNC_END=y
+}
+
+function arg_verbose() {
+    RSYNC_QUIET=
+}
+
+function arg_help() {
+    echo -e "ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \\ \n" \
+        "[--multi <tmux|screen|none>] \\ \n" \
+        "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
+    echo "Samples:"
+    echo "ssh-ec2 make          # Create, sync, execute, sync and terminate instance"
+    echo "ssh-ec2 --detach make # Create, sync, execute in bg and detach session"
+    echo "ssh-ec2 --attach      # Attach current session"
+    echo "ssh-ec2 --finish      # Attach, rsync and terminate instance EC2"
+    echo "ssh-ec2 --stop make   # Create, sync, execute, sync and save instance EC2"
+    echo "ssh-ec2 --leave       # Create, sync, execute"
+    exit 0
+}
+
+optspec=":lstdafL:R:i:vh-:"
+while getopts "$optspec" optchar; do
+    case "${optchar}" in
+        -)
+            case "${OPTARG}" in
+                leave)
+                    arg_leave
+                    ;;
+                stop)
+                    arg_stop
+                    ;;
+                terminate)
+                    arg_terminate
+                    ;;
+                detach)
+                    arg_detach
+                    ;;
+                attach)
+                    arg_attach
+                    ;;
+                finish)
+                    arg_finish
+                    ;;
+                multi|multiplex)
+                    arg_multiplex
+                    ;;
+                no-rsync)
+                    arg_no_rsync
+                    ;;
+                verbose)
+                    arg_verbose
+                    ;;
+                help)
+                    arg_help
+                    ;;
+                *)
+                    if [ "$OPTERR" = 1 ] && [ "${optspec:0:1}" != ":" ]; then
+                        echo "Unknown option --${OPTARG}" >&2
+                    fi
+                    ;;
+            esac;;
+        l)
+            arg_leave
+            ;;
+        s)
+            arg_stop
+            ;;
+        t)
+            arg_terminate
+            ;;
+        d)
+            arg_detach
+            ;;
+        a)
+            arg_attach
+            ;;
+        f)
+            arg_finish
+            ;;
+        L)
+            arg_L  ${OPTARG}
+            ;;
+        R)
+            arg_R ${OPTARG}
+            ;;
+        i)
+            arg_i ${OPTARG}
+            ;;
+        v)
+            arg_verbose
+            ;;
+        h)
+            arg_help
+            ;;
+        *)
+            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                echo "Non-option argument: '-${OPTARG}'" >&2
+            fi
+            ;;
+    esac
 done
+
+shift $((OPTIND-1))
+
 shopt -s nocasematch
 
-DEBUG=n
-if [[ "${DEBUG}" == y ]]; then
-  #AWS_DRY= --dryrun
-  AWS_INSTANCE_TYPE=t2.small
-  #AWS_INSTANCE_TYPE=t2.medium
-  #AWS_IMAGE_NAME="Amazon Linux AMI*"
-
-  if [[ -z "$AWS_FINAL_STATE" ]]; then
-    AWS_FINAL_STATE=leave
-  fi
-  NO_RSYNC_BEGIN=y
-  NO_RSYNC_END=y
-fi
+# ---
 
 CWBD=$(basename "$(pwd)")
-AWS_KEY_NAME=${AWS_KEY_NAME=${USER}}
-if [[ -z "${TRIGRAM}" ]] ; then
-  PREFIX=${AWS_KEY_NAME}
-else
-  PREFIX=${TRIGRAM}
+if [[ -z "${AWS_KEY_NAME}" ]] ; then
+    if [[ ! -z "${TRIGRAM}" ]] ; then
+      AWS_KEY_NAME=${TRIGRAM}
+    else
+      AWS_KEY_NAME=${USER}
+    fi
 fi
+
 if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
-  AWS_NAME_INSTANCE=${PREFIX}-${CWBD}
+  AWS_NAME_INSTANCE=${AWS_KEY_NAME}-${CWBD}
 fi
+
 
 AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE}}
 AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
@@ -193,7 +277,7 @@ if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
 else
     AWS_IAM_INSTANCE_PROFILE=""
 fi
-if [ -e ~/.aws/config ];  then
+if [[ -e ~/.aws/config ]] ;  then
     default_region=$(cat ~/.aws/config | grep region | cut -d '=' -f 2)
 else
     default_region=${_DEFAULT_REGION}
@@ -286,10 +370,15 @@ trap_with_arg() {
     done
 }
 
+function abort() {
+    echo -e "\n\e[91mAbort\e[0m"
+    exit -1
+}
+
 function finish() {
     trap - EXIT
-    trap_with_arg exit INT
-
+    trap_with_arg abort INT
+    [[ "${DEBUG}" == y ]] &&read -p "CONFIRM FINISH ?"
     # Check last instance
     nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 
@@ -352,9 +441,9 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
     echo ""
     # Create instance
     AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 describe-security-groups \
-      --group-names ppr-tensorflow \
+      --group-names ${AWS_NAME_INSTANCE} \
       --query 'SecurityGroups[*].GroupId' \
-      --output text 2>/dev/null)
+      --output text 2>/dev/null || echo "")
     if [[ -z "${AWS_SECURITY_GROUP_ID}" ]]; then
         echo -e "Creating new AWS EC2 security group... \c"
         AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 create-security-group \
@@ -380,7 +469,6 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
             shutdown_mode=stop
             ;;
     esac
-
     AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 run-instances \
       --region ${AWS_REGION}  \
       --instance-type ${AWS_INSTANCE_TYPE} \
@@ -421,7 +509,7 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
 
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
-    [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
+    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
     # TODO: use file and add with --exclude-from ???
     echo $EXCLUDE | xargs rsync -vz \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
@@ -429,11 +517,13 @@ if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_BEGIN}" ]] ; then
       --archive \
       --modify-window=1 \
       --update \
-      ${QUIET} \
+      ${RSYNC_QUIET} \
       --copy-links
+else
+    echo -e "\e[33mWarning: No rsync\e[0m"
 fi
 
-_CD="[ -e \"${AWS_RSYNC_DIR}\" ] && cd \"${AWS_RSYNC_DIR}\""
+_CD="[[ -e \"${AWS_RSYNC_DIR}\" ]] && cd \"${AWS_RSYNC_DIR}\""
 _CMD="$*"
 
 case "${MULTIPLEX}" in
@@ -493,14 +583,16 @@ nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
 # Reverce synchronisation
 if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
-    [ -e .rsyncignore ] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
+    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
     echo $EXCLUDE | xargs rsync -vza \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
-      --quiet \
+      ${RSYNC_QUIET} \
       --update \
       $([ "$AWS_DRY" != "" ] && echo "-n" ) \
       --ignore-times
     echo -e "done"
+else
+    echo -e "\e[33mWarning: No rsync\e[0m"
 fi
 exit 0

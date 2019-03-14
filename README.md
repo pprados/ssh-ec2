@@ -1,5 +1,5 @@
 # ssh-ec2
-Un utilitaire pour déporter les calculs des data-scientistes sur AWS.
+Un utilitaire pour augmenter la puissance de sa machine, grâce à AWS.
 
 ## Qu'est-ce que c'est ?
 `ssh-ec2` est un script bash, permettant de faciliter l'utilisation du cloud AWS pour la réalisation de 
@@ -14,7 +14,7 @@ calculs complexes avec des instances puissantes, équipées de GPU. L'outil se c
 
 ## Fonctionnalités
 Cet outils offre :
-- la possibilité d'indiquer quoi faire de l'instance à la fin du traitement
+- la possibilité d'indiquer le cycle de vie de l'instance à la fin du traitement
     - La laisser vivante (des frais supplémentaires sont appliqués par Amazon),
     - la sauvegarder et l'arreter (des frais moins élevé sont appliqués par Amazon)
     - l'interrompre et la détuire (pas de frais supplémentaires)
@@ -36,25 +36,26 @@ sans devoir injecter les credential dans l'instance (`aws s3 ls s3://mybucket`)
 
 ## Pré-requis sur AWS pour l'administrateur
 Pour utiliser l'outil `ssh-ec2`, il faut demander à l'administrateur AWS de créer :
-- une stratégie/policy [SshEc2Access](SshEc2Access.policy) pour permettre la création d'instances EC2, 
+- une stratégie/policy [SshEc2Access](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/SshEc2Access.policy) pour permettre 
+la création d'instances EC2, 
 et le droit de donner un rôle à l'instance ([iam:PassRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html)). 
 Elle sera associée à un groupe ou aux utilisateurs souhaitant pouvoir utiliser `ssh-ec2`.
 Les ressources accessibles peuvent être restreintes si besoins.
      
-- Des rôles, pour le service **EC2**, à associer aux instances qui seront construites par `ssh-ec2`.
+- Des rôles, pour le service **EC2**, à associer aux instances EC2 qui seront construites par `ssh-ec2`.
 Par exemple:
-    - Un role [EC2ReadOnlyAccessToS3](./EC2ReadOnlyAccessToS3.png), pour le service **EC2**, 
-    avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
-    ![AmazonEC2ReadOnlyAccess](./EC2ReadOnlyAccessToS3.png?raw=true "EC2ReadOnlyAccessToS3")
+    - Un role [EC2ReadOnlyAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png), 
+    pour le service **EC2**, avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
+    ![AmazonEC2ReadOnlyAccess](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png)
     - Un role [EC2FullAccessToS3](EC2FullAccessToS3.png), pour le service **EC2**, 
     avec la stratégie `AmazonEC2FullAccess`
-    ![EC2FullAccessToS3](./EC2FullAccessToS3.png?raw=true "EC2FullAccessToS3")
+    ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2FullAccessToS3.png)
     - Un role pour le service EC2, limité aux certains _buckets_
     - ...
 - créer un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
-![CreateNewGroup](./CreateNewGroup.png?raw=true "CreateNewGroup")
-- puis y associer les utilisateurs habilité à utiliser le service.
-![AssociateGroups](./AssociateGroups.png?raw=true "AssociateGroups")
+![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateNewGroup.png)
+- puis y associer les utilisateurs habilité à utiliser l'outil.
+![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/AssociateGroups.png)
 
 
 ## Pré-requis sur AWS pour l'utilisateur
@@ -66,7 +67,7 @@ L'utilisateur de `ssh-ec2` doit :
 export TRIGRAM=PPR
 ```
 - importer une pair de clé SSH valide avec le nom du trigram dans les différentes régions.
-![ImportKeyPair](./ImportKeyPair.png?raw=true "ImportKeyPair")
+![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/ImportKeyPair.png?raw=true "ImportKeyPair")
 
 A défaut, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environement `AWS_KEY_NAME`.
@@ -99,17 +100,40 @@ ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--n
 Un simple lancement de `ssh-ec2` permet d'avoir une session `bash`
 sur une instance EC2 qui sera détruire à la sortie du terminal.
 
+#### Utilisation en batch
 Les paramètres sont interprétés comme une commande à exécuter (comme avec un `ssh` classique).
 ```bash
 ssh-ec2 who am i # Invoke 'who am i' on EC2
+
+----------------------------------------------------------
+EC2 Name: PPR-ssh-ec2
+Region:   eu-central-1
+Type:     p2.xlarge
+Image Id: ami-002b6c63ff04afa5f (Deep Learning AMI (Ubuntu)*)
+Key name: PPR
+Tags:     User=pprados, Name=PPR-ssh-ec2, Trigram=PPR, Hostname=PPR-OCTO
+----------------------------------------------------------
+Synchronizes current directory (except files in .rsyncignore)... 
+ssh ubuntu@52.57.165.31 ...
+ubuntu   pts/0        2019-03-11 15:31 (82.238.92.100)
+Synchronizes result... done
 ```
 
 Pour indiquer le comportement que doit avoir l'instance EC2 à la fin de la session,
-il faut utiliser `--leave`, `--stop` ou `--terminate`.
+il faut utiliser 
+- `--leave` pour laisser instance vivante
+- `--stop` pour la sauvegarder et l'arréter
+- ou `--terminate` (par défaut) pour la supprimer.
+
 ```bash
 ssh-ec2 --stop "source activate cntk_p36 ; make train" # Sauve et arrète l'instance après le traitement
 ```
 
+Il est possible de rattraper une instance qui a vocation a être interrompu avec `--stop` ou `--terminate`.
+Pour cela, il faut lancer une autre session avec une autre règle de terminaison, avant d'interrompre la première.
+Le programme applique la gestion de l'instance EC2 s'il est le dernier à y avoir accès.
+
+#### Détachement
 Il est possible de lancer une commande et de détacher imédiatement le terminal. L'instance reste vivante.
 ```bash
 ssh-ec2 --detach "while sleep 1; do echo thinking; done" # Return immediately
@@ -119,41 +143,43 @@ un appel avec `--attach` permet de se rattacher au terminal
 ssh-ec2 --attach 
 ```
 Suivant l'utilitaire de multiplexage, il faut utiliser `Ctrl-B d` (tmux) ou `Ctrl-A d` (screen) pour
-se détacher de la session en la laissant vivante. Référez-vous à la documentation
-de ces outils pour en savoir plus.
+se détacher de la session en la laissant vivante. 
+Référez-vous à la documentation de ces outils pour en savoir plus.
 `ssh-ec2` se charge d'utiliser au mieux ces outils. 
 Par défaut, lors de l'invocation avec un `--detach`, `tmux` est utilisé.
 
 Pour récupérer les résultats d'une instance détachée, il faut s'y rattacher avec 
 ```bash
-ssh-ec2 --finish # Synchronize results 
+ssh-ec2 --finish # Synchronize results at end 
 ```
 
 Pour résumer:
 
-| Objectif                                                               | Procédure                           |
-|------------------------------------------------------------------------|-------------------------------------|
-| Lancer un `make` et attendre le résultat pour continuer                | `ssh-ec2 make`                      |
-| Lancer un `make` puis sauver l'état de l'instance et l'arreter         | `ssh-ec2 --stop make`               |
-| Lancer une session SSH sur une instance et la garder vivante           | `ssh-ec2 --leave`                   |
-| Lancer un `make` sur une instance et la garder vivante avec tmux       | `ssh-ec2 --leave --multi tmux make` |
-| Lancer un `make` et le laisser continuer détaché                       | `ssh-ec2 --detach make`             |
-| Jeter un oeil sur un traitement détaché                                | `ssh-ec2 --attach`                  |
-| Récupérer le résultat d'un `make` détaché puis terminer l'instance EC2 | `ssh-ec2 --finish`                  |
-| Récupérer le résultat d'un `make` détaché et garder l'instance EC2     | `ssh-ec2 --finish --leave`          |
+| Objectif                                                               | Procédure                             |
+|------------------------------------------------------------------------|---------------------------------------|
+| Lancer un `make` et attendre le résultat pour continuer                | `ssh-ec2 make`                        |
+| Lancer un `make` puis sauver l'état de l'instance et l'arreter         | `ssh-ec2 --stop make`                 |
+| Lancer une session SSH sur une instance et la garder vivante           | `ssh-ec2 --leave`                     |
+| Lancer un `make` sur une instance et la garder vivante avec tmux       | `ssh-ec2 --leave --multi tmux make`   |
+| Lancer un `make` et le laisser continuer détaché                       | `ssh-ec2 --detach make`               |
+| Jeter un oeil sur un traitement détaché                                | `ssh-ec2 --attach`                    |
+| Récupérer le résultat d'un `make` détaché puis terminer l'instance EC2 | `ssh-ec2 --finish`                    |
+| Récupérer le résultat d'un `make` détaché et garder l'instance EC2     | `ssh-ec2 --finish --leave`            |
+| Rattraper une session qui va être tuée à la fin du traitement          | Dans un autre shell `ssh-ec2 --leave` |
+| Forcer la suppression d'une instance                                   | `ssh-ec2 clear` |
 
 ### Synchronisation
 Parfois, il n'est pas nécessaire de synchroniser les fichiers. 
 Le paramètre `--no-rsync` permet cela.
 
-Pour avoir un suivi des fichiers synchronisés, il faut ajouter `--no-quiet` pour voir les détails.
+Pour avoir un suivi des fichiers synchronisés, il faut ajouter `--verbose` pour voir les détails.
 
 ### Paramètres supplémentaires
 Il est également possible de faire du reroutage de port.
 ```bash
 ssh-ec2 -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 ```
-ou d'indiquer le fichier de clé à utiliser.
+ou d'indiquer le fichier local de clé à utiliser.
 ```bash
 ssh-ec2 -I my_key.pem "who am i"
 ```
@@ -175,19 +201,25 @@ Pour résumer
 | -L<p:host:p> | transfert un port local sur un port distant de l'instance, le temps de la session SSH. |
 | -R<p:host:p> | transfert un port distant sur un port local de l'instance, le temps de la session SSH. |
 | --no-rsync   | Ne synchronise pas les fichiers du répertoire local avant le traitement, ni après.     |
-| --no-quiet   | Affiche les fichiers synchronisés                                                      |
+| --verbose    | Affiche les fichiers synchronisés                                                      |
 
 ## Utilisation dans un Makefile
 Il suffit de quelques recettes complémentaires dans un fichier `Makefile` pour pouvoir exécuter
-un traitement sur AWS.
+tous les traitement sur AWS.
 
 ```
 ## Makefile
+VENV_AWS=cntk_p36
+EC2_LIFE_CYCLE=--leave
+
 on-ec2-%: ## call make recipe on EC2
-	./ssh-ec2 -"source activate cntk_p36 ; make $(*:on-ec2-%=%)"
+	./ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:on-ec2-%=%)"
+
+detach-%: ## call make recipe on EC2
+	./ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:detach-%=%)"
 
 on-ec2-notebook: ## Start jupyter notebook on EC2
-	./ssh-ec2 -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
+	./ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 ```
 Avec ces règles, il suffit de préfixer les recettes d'origine pour les exécuter
 sur AWS. Par exemple, s'il existe une recette `train` dans le `Makefile`,
@@ -207,5 +239,5 @@ pour installer le nécessaire avant le traitement.
 Consultez les exemples [de Makefile ici](TODO) pour Python.
 
 # Contribution
-Toutes les contributions et suggestion sont les bienvues.
+Toutes les contributions et suggestion sont les bienvenues.
 Contactez moi (ppr@octo.com)
