@@ -1,6 +1,10 @@
 # ssh-ec2
 Un utilitaire pour augmenter la puissance de sa machine, grâce à AWS.
 
+TODO: 
+- expliquer l'installation de AWS CLI
+- la création et la diffusion des clés
+
 ## Qu'est-ce que c'est ?
 `ssh-ec2` est un script bash, permettant de faciliter l'utilisation du cloud AWS pour la réalisation de 
 calculs complexes avec des instances puissantes, équipées de GPU. L'outil se charge de :
@@ -34,6 +38,18 @@ sans devoir injecter les credential dans l'instance (`aws s3 ls s3://mybucket`)
 - ...
 
 
+## Installation
+Pour installer l'outil, il faut clonner le repo
+```bash
+cd src
+git clone https://gitlab.octo.com/pprados/ssh-ec2.git
+cd ssh-ec2
+```
+Puis installer:
+- soit un lien symbolique vers le source (`make install-with-link`) pour 
+bénéficier des mises à jours du repo
+- soit faire un copie dans `/usr/bin` (`make install`)
+
 ## Pré-requis sur AWS pour l'administrateur
 Pour utiliser l'outil `ssh-ec2`, il faut demander à l'administrateur AWS de créer :
 - une stratégie/policy [SshEc2Access](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/SshEc2Access.policy) pour permettre 
@@ -60,14 +76,54 @@ Par exemple:
 
 ## Pré-requis sur AWS pour l'utilisateur
 L'utilisateur de `ssh-ec2` doit :
+- avoir un compte AWS
 - appartenir au group `SshEc2`
 - installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
-- valoriser une variable TRIGRAM dans son `.bashrc` ou équivalent
 ```bash
-export TRIGRAM=PPR
+$ pip3 install awscli --upgrade --user
+$ aws --version
+
 ```
-- importer une pair de clé SSH valide avec le nom du trigram dans les différentes régions.
+- valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent 
+```bash
+echo export TRIGRAM=PPR >>~/.bashrc
+. ~/.bashrc
+```
+- Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
+```bash
+$ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 1024
+Generating public/private ecdsa key pair.
+Enter passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /home/pprados/.ssh/PPR.pem.
+Your public key has been saved in /home/pprados/.ssh/PPR.pem.pub.
+The key fingerprint is:
+SHA256:taVlVEajMhxDRCjAdvM2EMn8Es0UpJKiohS/fJqr2m4 pprados@PPR-OCTO
+The key's randomart image is:
++---[ECDSA 521]---+
+|   ..+.B+** .o=  |
+|    o.X.+. + o . |
+| ...o..B  = =    |
+| .o. .. =. O     |
+|o. .   oS.o      |
+|+ . .            |
+|.  o .           |
+| .E +            |
+|o+++.            |
++----[SHA256]-----+
+```
+- Récupérer la clé publique
+```bash
+$ ssh-keygen -f ~/.ssh/$TRIGRAM -y
+Enter passphrase: 
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQDI4u+M0rW2/yKAMqXtJVsPEzH3O1tSIXRkDKoMLvJFiw/uAEkgHagfjuTd
+EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7+2CDAkQ8prv7Tg9D
+2WWetHjrc+SdkXyTFQ==
+```
+- La copier dans le press-papier
+- importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
 ![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/ImportKeyPair.png?raw=true "ImportKeyPair")
+- Normalement, toutes les clés dans `.ssh` sont automatiquement disponible avec les sessions
 
 A défaut, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environement `AWS_KEY_NAME`.
@@ -78,12 +134,12 @@ Le programme est paramétrable via la ligne de commande ou à l'aide de variable
 
 Voici les valeurs par défaut des principaux paramètres proposé par l'outil.
 
-| Paramètre                           | Valeur par défaut           |
-|:------------------------------------|:----------------------------|
-| Region (AWS_REGION)                 | eu-central-1                |
-| Type d'instance (AWS_INSTANCE_TYPE) | p2.xlarge                   |
-| Image (AWS_IMAGE_NAME)              | Deep Learning AMI (Ubuntu)* |
-| Profile (AWS_IAM_INSTANCE_PROFILE)  | EC2ReadOnlyAccessToS3       |
+| Paramètre                             | Valeur par défaut           |
+|:--------------------------------------|:----------------------------|
+| Region (`AWS_REGION`)                 | eu-central-1                |
+| Type d'instance (`AWS_INSTANCE_TYPE`) | p2.xlarge                   |
+| Image (`AWS_IMAGE_NAME`)              | Deep Learning AMI (Ubuntu)* |
+| Profile (`AWS_IAM_INSTANCE_PROFILE`)  | EC2ReadOnlyAccessToS3       |
 
 
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
@@ -216,7 +272,7 @@ on-ec2-%: ## call make recipe on EC2
 	./ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:on-ec2-%=%)"
 
 detach-%: ## call make recipe on EC2
-	./ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:detach-%=%)"
+	./ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:detach-%=%)"
 
 on-ec2-notebook: ## Start jupyter notebook on EC2
 	./ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"

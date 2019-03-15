@@ -2,9 +2,8 @@ import os
 
 from setuptools import setup, find_packages
 
-# USE_GPU="-gpu" ou ""
-# si le poste est possède une carte nvidia
-# ou suivant la valeur de la variable d'environnement GPU (export GPU=1)
+# USE_GPU="-gpu" ou "" si le PC possède une carte NVidia
+# ou suivant la valeur de la variable d'environnement GPU (export GPU=yes)
 USE_GPU = "-gpu" if (os.environ['GPU'].lower() in ( 'yes')
                      if "GPU" in os.environ
                      else os.path.isdir("/proc/driver/nvidia")
@@ -22,6 +21,7 @@ setup(
              'daff',
              'awscli',
              'daff',
+             'awscli',
              ]
     },
     setup_requires=['setuptools_scm'],  # Pour utiliser Git pour gérer les versions
@@ -33,4 +33,6 @@ setup(
         'pandas~=0.22',
         'plotly~=2.7',
         'scikit-learn~=0.19',
+        'spacy~=2.0',
+        'nltk~=3.3',
     ])

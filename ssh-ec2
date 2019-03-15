@@ -41,6 +41,7 @@
 # - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
 # - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
 # - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: $AWS_KEY_NAME-<current working directory>-$AWS_KEY_NAME
+# - AWS_SECURITY_GROUP: Name of security group (default: $AWS_NAME_INSTANCE)
 # - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
 # - AWS_INSTANCE_USER : default user name in image (default:Calculate with the AWS_IMAGE_NAME)
 # - AWS_FINAL_STATE   : Final state. Must be leave, destroy or stop. Default: destroy
@@ -54,11 +55,15 @@
 set -e # Detect all errors
 shopt -s extglob
 
+CREATE_SECURITY_GROUP=no
+# Defautl security group
+AWS_SECURITY_GROUP=SshEc2
+
 # ---------------- For debug ----------------
 DEBUG=n
 if [[ "${DEBUG}" == y ]]; then
   #AWS_DRY= --dryrun
-  AWS_INSTANCE_TYPE=t2.small
+  #AWS_INSTANCE_TYPE=t2.small
   #AWS_INSTANCE_TYPE=t2.medium
   #AWS_IMAGE_NAME="Amazon Linux AMI*"
 
@@ -91,7 +96,7 @@ _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
 _DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
 _DEFAULT_RSYNC_QUIET=--quiet
 
-nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+nb_of_instance=$(pgrep -fa bash | tr '\n' ' ' | grep -c ssh-ec2 )
 declare -A TAGS # The user can set somme additional tags
 RSYNC_QUIET=${_DEFAULT_RSYNC_QUIET}
 
@@ -128,8 +133,8 @@ function arg_finish() {
 }
 
 function arg_multiplex() {
-    MULTIPLEX=$2
-    [ "$MULTIPLEX" == none ] && MULTIPLEX=""
+    MULTIPLEX=$1
+    if [ "$MULTIPLEX" == none ] ; then MULTIPLEX="" ; fi
 }
 
 function arg_L() {
@@ -191,7 +196,8 @@ while getopts "$optspec" optchar; do
                     arg_finish
                     ;;
                 multi|multiplex)
-                    arg_multiplex
+                    arg_multiplex $2
+                    shift
                     ;;
                 no-rsync)
                     arg_no_rsync
@@ -266,6 +272,9 @@ fi
 
 if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
   AWS_NAME_INSTANCE=${AWS_KEY_NAME}-${CWBD}
+fi
+if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
+  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
 fi
 
 
@@ -375,15 +384,17 @@ function abort() {
     exit -1
 }
 
+function nb_of_instance() {
+    pgrep -fa bash | sed 's/\\\n/ /g' | grep ssh-ec2
+}
+
 function finish() {
     trap - EXIT
     trap_with_arg abort INT
-    [[ "${DEBUG}" == y ]] &&read -p "CONFIRM FINISH ?"
-    # Check last instance
-    nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+    [[ "${DEBUG}" == y ]] && read -p "CONFIRM FINISH ?"
 
     # Only the last instance of ssh manage the final state
-    if [[ "${nb_of_instance}" < 3 ]] ; then
+    if [[ "${nb_of_instance}" < 2 ]] ; then
         # Stop the instance
         case "${AWS_FINAL_STATE}" in
             stop)
@@ -410,12 +421,14 @@ function finish() {
                   test "$STATE" != "terminated"; do
                   sleep 3;
                 done;
-                echo -e "\e[32mand security group... \e[0m\c"
-                aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_NAME_INSTANCE}
+                if [[ "$CREATE_SECURITY_GROUP" == "yes" ]] ; then
+                    echo -e "\e[32mand security group... \e[0m\c"
+                    aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_NAME_INSTANCE}
+                 fi
                 echo -e "\e[32mdone\e[0m"
                 ;;
             *)
-                if [[ $nb_of_instance > 2 ]] ; then
+                if [[ $nb_of_instance > 1 ]] ; then
                     AWS_FINAL_STATE=leave
                     echo -e "\e[91mWARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active\e[0m"
                 else
@@ -440,24 +453,26 @@ AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 describe-instances \
 if [[ -z "$AWS_INSTANCE_ID" ]]; then
     echo ""
     # Create instance
-    AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 describe-security-groups \
-      --group-names ${AWS_NAME_INSTANCE} \
-      --query 'SecurityGroups[*].GroupId' \
-      --output text 2>/dev/null || echo "")
-    if [[ -z "${AWS_SECURITY_GROUP_ID}" ]]; then
-        echo -e "Creating new AWS EC2 security group... \c"
-        AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 create-security-group \
-          --group-name ${AWS_NAME_INSTANCE} \
-          --description "Security group for ${AWS_NAME_INSTANCE}" \
-          ${AWS_DRY} \
-          --output text 2>/dev/null)
-        echo -e "with port 22 open... \c"
-       aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
-          --group-name ${AWS_NAME_INSTANCE} \
-          --protocol tcp --port 22 \
-          --cidr 0.0.0.0/0 \
-          ${AWS_DRY} >/dev/null  2>&1
-        echo -e "done"
+    if [[ "$CREATE_SECURITY_GROUP" == "yes" ]] ; then
+        AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 describe-security-groups \
+          --group-names ${AWS_SECURITY_GROUP} \
+          --query 'SecurityGroups[*].GroupId' \
+          --output text 2>/dev/null || echo "")
+        if [[ -z "${AWS_SECURITY_GROUP_ID}" ]]; then
+            echo -e "Creating new AWS EC2 security group... \c"
+            AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 create-security-group \
+              --group-name ${AWS_SECURITY_GROUP} \
+              --description "Security group for ${AWS_NAME_INSTANCE}" \
+              ${AWS_DRY} \
+              --output text 2>/dev/null)
+            echo -e "with port 22 open... \c"
+           aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
+              --group-name ${AWS_SECURITY_GROUP} \
+              --protocol tcp --port 22 \
+              --cidr 0.0.0.0/0 \
+              ${AWS_DRY} >/dev/null  2>&1
+            echo -e "done"
+        fi
     fi
 
     echo -e "Creating new AWS EC2 instance... \c"
@@ -507,7 +522,9 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
   --output text \
   --query 'Reservations[*].Instances[*].NetworkInterfaces[*].Association.PublicIp')
 
-if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_BEGIN}" ]] ; then
+[[ "${DEBUG}" == y ]] && echo "nb_of_instance=$nb_of_instance"
+
+if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
     # TODO: use file and add with --exclude-from ???
@@ -520,7 +537,7 @@ if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_BEGIN}" ]] ; then
       ${RSYNC_QUIET} \
       --copy-links
 else
-    echo -e "\e[33mWarning: No rsync\e[0m"
+    echo -e "\e[33mWarning: No rsync (other ssh-ec2 session ?)\e[0m"
 fi
 
 _CD="[[ -e \"${AWS_RSYNC_DIR}\" ]] && cd \"${AWS_RSYNC_DIR}\""
@@ -575,13 +592,15 @@ esac
 
 echo ""
 echo "ssh ${AWS_HOST} ..."
-#( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
-ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}"
-# Refresh nb_of_instance
-nb_of_instance=$(ps aux | grep '[s]sh-ec2' | wc -l )
+if [[ $DEBUG == y ]] ; then
+    ( set -x; ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}" )
+else
+    ssh ${PEM_SSH} ${AWS_HOST} ${AWS_DISABLE_HOST_CHECKING} ${_TERM} ${SSH_PARAMS} "${_CMD}"
+fi
 
 # Reverce synchronisation
-if [[ "$nb_of_instance" < 3 && -z "${NO_RSYNC_END}" ]] ; then
+[[ "${DEBUG}" == y ]] && echo "nb_of_instance=$nb_of_instance"
+if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
     echo $EXCLUDE | xargs rsync -vza \
