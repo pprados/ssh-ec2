@@ -14,17 +14,16 @@ setup(
     use_scm_version=True,               # Gestion des versions à partir des commits Git
     python_requires='~=3.6',            # Version de Python
     packages=find_packages(),
+    setup_requires=['setuptools_scm'],  # Pour utiliser Git pour gérer les versions
     extras_require={                    # Package nécessaires aux builds et tests mais pas au run
         'tests':
             ['mock',
              'unittest2',
              'daff',
              'awscli',
-             'daff',
              'awscli',
              ]
     },
-    setup_requires=['setuptools_scm'],  # Pour utiliser Git pour gérer les versions
     install_requires=                   # Exemples de packages nécessaires au run
     [
         'tensorflow' + USE_GPU + '~=0.5',

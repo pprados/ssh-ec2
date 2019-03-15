@@ -40,6 +40,7 @@
 # - AWS_IMAGE_ID      : ami-image. Default: Search with $AWS_IMAGE_NAME
 # - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
 # - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
+# - AWS_USER_DATA     : Script to execute just after create the EC2 instance.
 # - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: $AWS_KEY_NAME-<current working directory>-$AWS_KEY_NAME
 # - AWS_SECURITY_GROUP: Name of security group (default: $AWS_NAME_INSTANCE)
 # - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
@@ -60,7 +61,6 @@ CREATE_SECURITY_GROUP=no
 AWS_SECURITY_GROUP=SshEc2
 
 # ---------------- For debug ----------------
-DEBUG=n
 if [[ "${DEBUG}" == y ]]; then
   #AWS_DRY= --dryrun
   #AWS_INSTANCE_TYPE=t2.small
@@ -92,9 +92,11 @@ _DEFAULT_REGION=eu-central-1
 _DEFAULT_INSTANCE_TYPE=p2.xlarge
 _DEFAULT_MULTIPLEX=
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
-#_DEFAULT_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"  # FIXME
 _DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
 _DEFAULT_RSYNC_QUIET=--quiet
+#_DEFAULT_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2);"
+_DEFAULT_USER_DATA=""
+
 
 nb_of_instance=$(pgrep -fa bash | tr '\n' ' ' | grep -c ssh-ec2 )
 declare -A TAGS # The user can set somme additional tags
@@ -207,6 +209,9 @@ while getopts "$optspec" optchar; do
                     ;;
                 help)
                     arg_help
+                    ;;
+                debug)
+                    DEBUG=y
                     ;;
                 *)
                     if [ "$OPTERR" = 1 ] && [ "${optspec:0:1}" != ":" ]; then
@@ -355,7 +360,7 @@ __tags=${__tags%*, }
 
 AWS_TAGS="ResourceType=instance,Tags=$_TAGS"
 AWS_FINAL_STATE=${AWS_FINAL_STATE=${_DEFAULT_FINAL_STATE}}
-AWS_USER_DATA=${AWS_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2)"}
+AWS_USER_DATA=${AWS_USER_DATA=${_DEFAULT_USER_DATA}}
 AWS_DISABLE_HOST_CHECKING="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet"
 
 

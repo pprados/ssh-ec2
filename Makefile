@@ -1,9 +1,24 @@
+#!/usr/bin/env make
+# SNIPPET Le shebang précédant permet de creer des alias des cibles du Makefile.
+# Il faut que le Makefile soit executable
+# 	chmod u+x Makefile
+# 	git update-index --chmod=+x Makefile
+# Puis, par exemple
+# 	ln -s Makefile test
+# 	ln -s Makefile train
+#   ln -s Makefile ec2-ssh
+# 	./test 			# Execute make test
+#   ./train 		# Train the model
+#   ./ec2-ssh -l 	# User parameter from Makefile
+
 # SNIPPET pour changer le mode de gestion du Makefile.
 # Avec ces trois paramètres, toutes les lignes d'une recette sont invoquées dans le même shell.
 # Ainsi, il n'est pas nécessaire d'ajouter des '&&' ou des '\' pour regrouper les lignes.
 # Comme Make affiche l'intégralité du block de la recette avant de l'exécuter, il n'est
 # pas toujours facile de savoir quel est la ligne en échec.
 # Je vous conseille dans ce cas d'ajouter au début de la recette 'set -x'
+# Attention : il faut une version 4.2.1 minimum. Les versions CentOS d'Amazone ont une version 3.82.
+# Utilisez 'conda install make==4.2.1 -y'
 SHELL=/bin/bash
 .SHELLFLAGS = -e -c
 .ONESHELL:
@@ -55,7 +70,8 @@ EXTRA_INDEX:=--extra-index-url=https://pypi.anaconda.org/octo/label/dev/simple
 	remove-kernel \
 	clean-notebooks notebook \
 	git-config \
-	requirements
+	requirements \
+	ec2-*
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour gérer automatiquement l'aide du Makefile.
@@ -267,8 +283,15 @@ validate: test build-all ## Validate the version
 # - `make detach-build-all` détache le recalcule tous les notebooks sur EC2
 
 # Quel venv utilisé sur l'instance EC2 ?
-AWS_INSTANCE_TYPE=t2.small
 VENV_AWS=cntk_p36
+
+# Quels type d'instance
+export AWS_INSTANCE_TYPE=t2.small
+export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+export AWS_REGION=eu-central-1
+#export AWS_IAM_INSTANCE_PROFILE=EC2ReadOnlyAccessToS3
+export AWS_IAM_INSTANCE_PROFILE=""
+export AWS_USER_DATA="conda activate $(VENV_AWS) ; conda install make==4.2.1 -y"
 
 # Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
 EC2_LIFE_CYCLE=--terminate
@@ -290,6 +313,9 @@ ec2-detach-%: ## call make recipe on EC2 and detach immediatly
 ec2-notebook: ## Start jupyter notebook on EC2
 	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 
+# Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile ('make ec2-ssh')
+ec2-ssh: ## Start ssh session on EC2 with same parameters
+	ssh-ec2 --leave
 
 ## ---------------------------------------------------------------------------------------
 install: ## Installe une copie de ssh-ec2 dans /usr/bin
@@ -301,7 +327,8 @@ install-with-link: ## Installe dans /usr/bin, un lien vers le source de ssh-ec2
 	sudo rm -f /usr/bin/ssh-ec2
 	sudo ln -s $(shell pwd)/ssh-ec2 /usr/bin/ssh-ec2
 
-# Ici, quelquels exemples de recettes bidons
+## ---------------------------------------------------------------------------------------
+# Simulation d'un train qui prend du temps
 train: requirements ## Train the model
 	for i in $(seq 1 120); do echo thinking; while sleep 1 ; done
 
