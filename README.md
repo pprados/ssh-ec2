@@ -37,6 +37,13 @@ sans devoir injecter les credential dans l'instance (`aws s3 ls s3://mybucket`)
 - D'ajouter des tags aux instances
 - ...
 
+Il permet d'ignorer :
+- l'AMI spécifique à la région pour l'image à utiliser
+- l'adresse IP de l'instance
+- le `user` à utiliser pour se connecter (`ubuntu`, `ec2-user`, ...)
+- le changement de répertoire un fois connecté (`cd prj`)
+- l'activation de `tmux` ou de `screen` pour reprendre la main (`tmux a`)
+- la synchronisation des fichiers
 
 ## Installation
 Pour installer l'outil, il faut clonner le repo
@@ -47,7 +54,7 @@ $ cd ssh-ec2
 ```
 Puis installer:
 - soit un lien symbolique vers le source (`make install-with-link`) pour 
-bénéficier des mises à jours du repo
+bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sources)
 - soit faire un copie dans `/usr/bin` (`make install`)
 
 ## Pré-requis sur AWS pour l'administrateur
@@ -88,10 +95,19 @@ $ pip3 install awscli --upgrade --user
 $ aws --version
 
 ```
+- [créer une paire de clé](https://help.bittitan.com/hc/en-us/articles/115008255268-How-do-I-find-my-AWS-Access-Key-and-Secret-Access-Key-)
+- [configurer](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) aws
+```bash
+$ aws configure
+AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
+AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+Default region name [None]: eu-west-1
+Default output format [None]: json
+```
 - valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent 
 ```bash
-echo export TRIGRAM=PPR >>~/.bashrc
-. ~/.bashrc
+$ echo export TRIGRAM=PPR >>~/.bashrc
+$ . ~/.bashrc
 ```
 - Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
 ```bash
@@ -147,6 +163,14 @@ Voici les valeurs par défaut des principaux paramètres proposé par l'outil.
 | Profile (`AWS_IAM_INSTANCE_PROFILE`)      | EC2ReadOnlyAccessToS3       |
 | Initialisation de la VM (`AWS_USER_DATA`) | ''                          |
 
+Notez que pour ajouter un script d'initialisation de la VM, il faut :
+- soit utiliser un fichier (`file://....sh`)
+- soit utiliser un script complet AVEC shebang
+```bash
+export AWS_USER_DATA="#!/usr/bin/env bash \
+source activate $(VENV_AWS) \
+conda install 'make>=4' -y"
+```
 
 Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnement
 ```bash
@@ -283,6 +307,14 @@ VENV_AWS=cntk_p36
 export AWS_INSTANCE_TYPE=m5.4xlarge
 export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
 export AWS_REGION=eu-west-3
+# Exemple pour s'assurer d'avoir une bonne version du programme 'make' dans le venv
+export AWS_USER_DATA
+define AWS_USER_DATA
+#!/bin/bash -x
+exec > /tmp/user-data.log 2>&1
+sudo su - ec2-user -c "conda install -n $(VENV_AWS) make=4.2.1 -y"
+endef
+
 
 # Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
 EC2_LIFE_CYCLE=--stop

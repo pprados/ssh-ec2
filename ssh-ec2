@@ -35,20 +35,18 @@
 # - AWS_PEM           : PEM file path to connect to AWS with SSH
 #                       or add your key with ssh-add ~/.ssh/id_rsa
 #                       or use -i pemfile.pem in command line (optional if the key was added with ssh-add)
+# - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
+# - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
 # - AWS_KEY_NAME      : Pair key name in AWS. default $USER
 # - AWS_IMAGE_NAME    : Name of image. Default: "Deep Learning AMI (Ubuntu) Version *"
 # - AWS_IMAGE_ID      : ami-image. Default: Search with $AWS_IMAGE_NAME
-# - AWS_INSTANCE_TYPE : Instance type (default: p2.xlarge)
-# - AWS_REGION        : Region (default: $AWS_DEFAULT_REGION or eu-central-1)
 # - AWS_USER_DATA     : Script to execute just after create the EC2 instance.
 # - AWS_NAME_INSTANCE : Name of the AWS EC2 instance. Default: $AWS_KEY_NAME-<current working directory>-$AWS_KEY_NAME
-# - AWS_SECURITY_GROUP: Name of security group (default: $AWS_NAME_INSTANCE)
+# - AWS_SECURITY_GROUP: Name of security group (default: SshEc2 or $AWS_NAME_INSTANCE)
 # - AWS_RSYNC_DIR     : Target directory in AWS EC2 instance. Default: basename of current directory
 # - AWS_INSTANCE_USER : default user name in image (default:Calculate with the AWS_IMAGE_NAME)
 # - AWS_FINAL_STATE   : Final state. Must be leave, destroy or stop. Default: destroy
 # - MULTIPLEX         : tmux (default) or screen or empty (setmuxe http://hyperpolyglot.org/multiplexers)
-# If the AWS_FINAL_STATE is leave, a screen is detached in the remote device.
-# You can reattach with `./ssh-ec2 -a`
 
 # File
 # - .rsyncignore      : list of directories to ignore when synchronize files with rsync
@@ -58,7 +56,7 @@ shopt -s extglob
 
 CREATE_SECURITY_GROUP=no
 # Defautl security group
-AWS_SECURITY_GROUP=SshEc2
+AWS_SECURITY_GROUP=SshEC2
 
 # ---------------- For debug ----------------
 if [[ "${DEBUG}" == y ]]; then
@@ -90,12 +88,16 @@ fi
 _DEFAULT_FINAL_STATE=terminate
 _DEFAULT_REGION=eu-central-1
 _DEFAULT_INSTANCE_TYPE=p2.xlarge
+# FIXME
+_DEFAULT_INSTANCE_TYPE=t2.small
 _DEFAULT_MULTIPLEX=
 _DEFAULT_IMAGE_NAME="Deep Learning AMI (Ubuntu)*"
 _DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
 _DEFAULT_RSYNC_QUIET=--quiet
 #_DEFAULT_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2);"
-_DEFAULT_USER_DATA=""
+_DEFAULT_USER_DATA="#!/bin/bash
+echo 'bar' > /tmp/bar"
+_DEFAULT_SECURITY_GROUP=SshEC2
 
 
 nb_of_instance=$(pgrep -fa bash | tr '\n' ' ' | grep -c ssh-ec2 )
@@ -278,14 +280,15 @@ fi
 if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
   AWS_NAME_INSTANCE=${AWS_KEY_NAME}-${CWBD}
 fi
-if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
-  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
-fi
+#if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
+#  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
+#fi
 
 
 AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE}}
 AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
 AWS_IAM_INSTANCE_PROFILE=${AWS_IAM_INSTANCE_PROFILE=${_DEFAULT_IAM_INSTANCE_PROFILE}}
+AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP=${_DEFAULT_SECURITY_GROUP}}
 if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
     AWS_IAM_INSTANCE_PROFILE="--iam-instance-profile Name=${AWS_IAM_INSTANCE_PROFILE}"
 else
@@ -330,12 +333,6 @@ if [[ -z "${AWS_INSTANCE_USER}" ]]; then
     done
 fi
 
-if [[ "${AWS_IMAGE_NAME}" =~ "ubuntu" ]] ; then
-AWS_INSTANCE_USER=${AWS_INSTANCE_USER=ubuntu}
-elif [[ "${AWS_IMAGE_NAME}" =~ "Amazon Linux" ]] ; then
-AWS_INSTANCE_USER=${AWS_INSTANCE_USER=ubuntu}
-fi
-
 AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE=${_DEFAULT_INSTANCE_TYPE}}
 
 MULTIPLEX=${MULTIPLEX=${_DEFAULT_MULTIPLEX}}
@@ -347,7 +344,6 @@ TAGS["Hostname"]="$(hostname)"
 if [ ! -z "${TRIGRAM}" ] ; then
   TAGS["Trigram"]="${TRIGRAM}"
 fi
-
 
 _TAGS="["
 __tags=""
@@ -362,7 +358,6 @@ AWS_TAGS="ResourceType=instance,Tags=$_TAGS"
 AWS_FINAL_STATE=${AWS_FINAL_STATE=${_DEFAULT_FINAL_STATE}}
 AWS_USER_DATA=${AWS_USER_DATA=${_DEFAULT_USER_DATA}}
 AWS_DISABLE_HOST_CHECKING="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet"
-
 
 if [[ ! -z "${AWS_PEM}" ]]; then
 PEM_SSH="-i ${AWS_PEM}"
@@ -390,7 +385,7 @@ function abort() {
 }
 
 function nb_of_instance() {
-    pgrep -fa bash | sed 's/\\\n/ /g' | grep ssh-ec2
+    pgrep -fa bash | sed 's/\\\n/ /g' | grep ssh-ec2 | wc -l
 }
 
 function finish() {
@@ -459,19 +454,25 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
     echo ""
     # Create instance
     if [[ "$CREATE_SECURITY_GROUP" == "yes" ]] ; then
-        AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 describe-security-groups \
+        AWS_SECURITY_GROUP_ID=$(aws ec2 \
+        describe-security-groups \
+          --region ${AWS_REGION} \
           --group-names ${AWS_SECURITY_GROUP} \
           --query 'SecurityGroups[*].GroupId' \
           --output text 2>/dev/null || echo "")
         if [[ -z "${AWS_SECURITY_GROUP_ID}" ]]; then
             echo -e "Creating new AWS EC2 security group... \c"
-            AWS_SECURITY_GROUP_ID=$(aws --region ${AWS_REGION} ec2 create-security-group \
+            AWS_SECURITY_GROUP_ID=$(aws ec2 \
+            create-security-group \
+              --region ${AWS_REGION} \
               --group-name ${AWS_SECURITY_GROUP} \
               --description "Security group for ${AWS_NAME_INSTANCE}" \
               ${AWS_DRY} \
               --output text 2>/dev/null)
             echo -e "with port 22 open... \c"
-           aws --region ${AWS_REGION} ec2 authorize-security-group-ingress \
+           aws ec2 \
+           authorize-security-group-ingress \
+              --region ${AWS_REGION} \
               --group-name ${AWS_SECURITY_GROUP} \
               --protocol tcp --port 22 \
               --cidr 0.0.0.0/0 \
@@ -489,22 +490,33 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
             shutdown_mode=stop
             ;;
     esac
-    AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 run-instances \
-      --region ${AWS_REGION}  \
+
+    if [[ "$AWS_USER_DATA" =~ file:* ]] ; then
+        USER_DATA=$AWS_USER_DATA
+    else
+        tmpfile=$(mktemp /tmp/ssh-ec2.XXXXXX)
+        echo "${AWS_USER_DATA}" >$tmpfile
+        USER_DATA="file://$tmpfile"
+    fi
+    AWS_INSTANCE_ID=$(aws \
+      ec2 run-instances \
+      --region ${AWS_REGION} \
       --instance-type ${AWS_INSTANCE_TYPE} \
       ${AWS_IAM_INSTANCE_PROFILE} \
-      --security-groups ${AWS_NAME_INSTANCE} \
+      --security-groups ${AWS_SECURITY_GROUP} \
       --tag-specifications "${AWS_TAGS}" \
       --image-id ${AWS_IMAGE_ID} \
       --key-name ${AWS_KEY_NAME} \
       --instance-initiated-shutdown-behavior ${shutdown_mode} \
-      --user-data "${AWS_USER_DATA}" \
+      --user-data ${USER_DATA} \
       --output text --query 'Instances[*].InstanceId')
     echo -e "starting... \c"
     aws --region ${AWS_REGION} ec2 wait instance-status-ok --instance-ids ${AWS_INSTANCE_ID}
     echo -e "done"
+    [ -e "$tmpfile" ] && rm "$tmpfile"
 fi
 STATE=$(aws --region ${AWS_REGION} ec2 describe-instances --instance-ids $AWS_INSTANCE_ID --output text --query 'Reservations[*].Instances[*].State.Name')
+set +x
 if [ "$STATE" == "stopping" -o "$STATE" == "stopped" ]; then
     echo ""
     echo -e "Start instance... \c"

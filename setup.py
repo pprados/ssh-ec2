@@ -21,7 +21,6 @@ setup(
              'unittest2',
              'daff',
              'awscli',
-             'awscli',
              ]
     },
     install_requires=                   # Exemples de packages nécessaires au run

@@ -93,11 +93,11 @@ help: # Print all majors target
 # SNIPPET pour affichier la valeur d'une variable d'environnement
 # tel quelle est vue par le Makefile. Par exemple 'make dump-CONDA_PACKAGE'
 dump-%:
-	@ if [ "${${*}}" = "" ]; then
-		echo "Environment variable $* not set";
-		exit 1;
-	else
-		echo "$*=${${*}}";
+	@if [ "${${*}}" = "" ]; then \
+		echo "Environment variable $* not set"; \
+		exit 1; \
+	else \
+		echo "$*=${${*}}"; \
 	fi
 
 ## ---------------------------------------------------------------------------------------
@@ -289,9 +289,15 @@ VENV_AWS=cntk_p36
 export AWS_INSTANCE_TYPE=t2.small
 export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
 export AWS_REGION=eu-central-1
-#export AWS_IAM_INSTANCE_PROFILE=EC2ReadOnlyAccessToS3
-export AWS_IAM_INSTANCE_PROFILE=""
-export AWS_USER_DATA="conda activate $(VENV_AWS) ; conda install make==4.2.1 -y"
+export AWS_IAM_INSTANCE_PROFILE=EC2ReadOnlyAccessToS3
+export AWS_USER_DATA
+# Les deux premières lignes permettent d'avoir une trace de l'initialisation
+# de l'instance EC2 sur /tmp/user-data.log
+define AWS_USER_DATA
+#!/bin/bash -x
+exec > /tmp/user-data.log 2>&1
+sudo su - ec2-user -c "conda install -n $(VENV_AWS) make>=4 -y"
+endef
 
 # Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
 EC2_LIFE_CYCLE=--terminate
@@ -330,5 +336,6 @@ install-with-link: ## Installe dans /usr/bin, un lien vers le source de ssh-ec2
 ## ---------------------------------------------------------------------------------------
 # Simulation d'un train qui prend du temps
 train: requirements ## Train the model
-	for i in $(seq 1 120); do echo thinking; while sleep 1 ; done
+	for i in $$(seq 1 120); do echo thinking; sleep 1 ; done
+
 
