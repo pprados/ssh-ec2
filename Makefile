@@ -90,7 +90,7 @@ EXTRA_INDEX:=--extra-index-url=https://pypi.anaconda.org/octo/label/dev/simple
 help: ## Print all majors target
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	printf "\e[36m%-20s\e[0m %s\n" "build-<dir>" "Execute notebooks in notebooks/<dir>\n"
-	printf "\e[36m%-20s\e[0m %s\n" "build-all" "Execute all notebooks\n"
+	printf "\e[36m%-20s\e[0m %s\n" "build-*" "Execute all notebooks\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-<target>" "Apply <target> receipt on EC2 instance\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-tmux-<target>" "Apply <target> receipt on EC2 instance with tmux activated\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-detach-<target>" "Apply <target> receipt on EC2 instance and detach the shell\n"
@@ -167,13 +167,13 @@ endif
 # - CHECK_VENV pour vérifier l'activation d'un VENV avant de commencer
 # - VALIDATE_VENV pour forcer l'activation d'un VENV si besoin
 
-CHECK_VENV=if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
+CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
   then ( echo -e "\e[91mUse: \e[36mconda activate $(VENV)\e[91m before using 'make'\e[0m"; exit 1 ) ; fi
 
-ACTIVATE_VENV=source activate $(VENV)
+ACTIVATE_VENV=conda activate $(VENV)
 
-#VALIDATE_VENV=$(CHECK_VENV)
-VALIDATE_VENV=$(ACTIVATE_VENV)
+VALIDATE_VENV=$(CHECK_VENV)
+#VALIDATE_VENV=$(ACTIVATE_VENV)
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour gérer correctement toute les dépendances python du projet.
@@ -256,7 +256,7 @@ $(CONDA_PACKAGE)/spacy/data/%: $(PIP_PACKAGE)
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour préparer l'environnement d'un projet juste après un `git clone`
 configure: ## Prepare the environment (conda venv, kernel, ...)
-	@conda create -n "$(VENV)" python=$(PYTHON_VERSION) -y
+	@conda create --name "$(VENV)" python=$(PYTHON_VERSION) -y
 	source activate "$(VENV)"
 	$(MAKE) requirements
 	echo -e "Use: conda activate $(VENV)"
@@ -276,13 +276,14 @@ upgrade-venv upgrade-$(VENV): ## Upgrade packages to last versions
 	$(VALIDATE_VENV)
 	conda update --all
 	pip list --format freeze --outdated | sed 's/(.*//g' | xargs -r -n1 pip install -U
+	echo -e "\e[36mAfter validation, upgrade the setup.py\e[0m"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET de validation des notebooks en les ré-executants.
 # L'idée est d'avoir un sous répertoire par phase, dans le répertoire `notebooks`.
-# Ainsi, il suffit d'un `make build-phaseX` pour valider tous les notesbooks du répertoire `notebooks/phaseX`.
-# Pour gérer l'ordre d'exécution, il faut appliquer un ordre alphabétique, en préfixant chaque notebook d'un
-# numéro par exemple.
+# Ainsi, il suffit d'un `make build-phase1` pour valider tous les notesbooks du répertoire `notebooks/phase1`.
+# Pour valider toutes les phases : `make build-*`.
+# L'ordre alphabétique est utilisé. Il est conseillé de préfixer chaque notebook d'un numéro.
 build-%: requirements
 	$(VALIDATE_VENV)
 	time jupyter nbconvert \
@@ -290,7 +291,6 @@ build-%: requirements
 	  --execute \
 	  --inplace notebooks/$*/*.ipynb
 
-build-all: build-* ## Re-build all notebooks
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour executer jupyter notebook, mais en s'assurant de la bonne application des dépendances.
@@ -320,12 +320,11 @@ clean-pip: # Remove all the pip package
 # SNIPPET pour nettoyer complètement l'environnement Conda
 clean-venv clean-$(VENV):  ## Set the current VENV empty
 	@echo -e "\\e[36mClean virtualenv $(VENV)...\\e[0m"
-	if [[ -e $(CONDA_PREFIX) ]] ; then \
-		source deactivate
-		$(DEACTIVATE) conda env remove -y -n $(VENV) -q >/dev/null ; \
-	fi
+	source deactivate
+	conda env remove -y -n $(VENV) -q >/dev/null ; \
 	echo -e "\\e[36mRe-create virtualenv $(VENV)...\\e[0m"
 	conda create -y -q -n $(VENV)
+	touch setup.py
 	echo -e "\\e[32mWarning: Conda virtualenv $(VENV) is empty.\\e[0m"
 
 ## ---------------------------------------------------------------------------------------
@@ -342,7 +341,8 @@ test: requirements ## Run all tests
 	$(VALIDATE_VENV)
 	python -m unittest discover -s tests -b
 
-validate: test build-all ## Validate the version
+# SNIPPET pour vérifier les TU et le recalcule de tous les notebooks
+validate: test build-* ## Validate the version before commit
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour ajouter la capacité d'exécuter des recettes sur une instance éphémère EC2.
@@ -378,7 +378,8 @@ EC2_LIFE_CYCLE=--terminate
 ec2-%: ## call make recipe on EC2
 	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:ec2-%=%)"
 
-# Recette permettant un 'make ec2-tmux-test'
+# Recette permettant d'exécuter une recette avec un tmux activé.
+# Par exemple `make ec2-tmux-train`
 ec2-tmux-%: ## call make recipe on EC2 with a tmux session
 	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; make $(*:ec2-tmux-%=%)"
 
@@ -391,8 +392,8 @@ ec2-detach-%: ## call make recipe on EC2 and detach immediatly
 ec2-notebook: ## Start jupyter notebook on EC2
 	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 
-# Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile ('make ec2-ssh')
-ec2-ssh: ## Start ssh session on EC2 with same parameters
+# Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile (`make ec2-ssh`)
+ec2-ssh: ## Start ssh session on EC2 with parameters in current Makefile
 	ssh-ec2 --leave
 
 ## ---------------------------------------------------------------------------------------

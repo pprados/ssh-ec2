@@ -294,48 +294,8 @@ Pour résumer
 
 ## Utilisation dans un Makefile
 Il suffit de quelques recettes complémentaires dans un fichier `Makefile` pour pouvoir exécuter
-tous les traitement sur AWS.
+tous les traitement sur AWS. Consultez le fichier [Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true).
 
-```
-## Makefile
-...
-VENV_AWS=cntk_p36
-export AWS_INSTANCE_TYPE=m5.4xlarge
-export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
-export AWS_REGION=eu-west-3
-# Exemple pour s'assurer d'avoir une bonne version du programme 'make' dans le venv
-export AWS_USER_DATA
-define AWS_USER_DATA
-#!/bin/bash -x
-exec > /tmp/user-data.log 2>&1
-sudo su - ec2-user -c "conda install -n $(VENV_AWS) make=4.2.1 -y"
-endef
-
-
-# Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
-EC2_LIFE_CYCLE=--stop
-
-# Recette permettant un 'make ec2-test'
-ec2-%: ## call make recipe on EC2
-	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:ec2-%=%)"
-
-# Recette permettant un 'make ec2-tmux-test'
-ec2-tmux-%: ## call make recipe on EC2 with a tmux session
-	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; make $(*:ec2-tmux-%=%)"
-
-# Recette permettant un 'make ec2-detach-test'
-# Il faut faire un ssh-ec2 --finish pour rapatrier les résultats à la fin
-ec2-detach-%: ## call make recipe on EC2 and detach immediatly
-	ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:ec2-detach-%=%)"
-
-# Recette pour lancer un jupyter notebook sur EC2
-ec2-notebook: ## Start jupyter notebook on EC2
-	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
-
-# Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile ('make ec2-ssh')
-ec2-ssh: ## Start ssh session on EC2 with same parameters
-	ssh-ec2 --leave
-```
 Avec ces règles, il suffit de préfixer les recettes d'origine pour les exécuter
 sur AWS. Par exemple, s'il existe une recette `train` dans le `Makefile`,
 ```bash
@@ -351,8 +311,9 @@ Les recettes doivent compléter l'environnement si nécessaire.
 Il est conseiller de rédiger des règles capablent de le détecter
 pour installer le nécessaire avant le traitement.
 
-Consultez les exemples [de Makefile ici](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true) pour Python.
-
+# Bonus
+De nombreuses recettes utils pour un Datascientist sont présente dans le 
+[Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.
 Contactez moi (ppr@octo.com)
