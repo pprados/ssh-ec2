@@ -2,7 +2,7 @@
 Un utilitaire pour augmenter la puissance de sa machine, grâce à AWS.
 
 ## Qu'est-ce que c'est ?
-`ssh-ec2` est un script bash, permettant de faciliter l'utilisation du cloud AWS pour la réalisation de 
+`ssh-ec2` est un script `bash`, permettant de faciliter l'utilisation du cloud AWS pour la réalisation de 
 calculs complexes avec des instances puissantes, équipées de GPU. L'outil se charge de :
 - créer et lancer une instance éphémère EC2 
 - répliquer le répertoire courant sur l'instance
@@ -15,9 +15,9 @@ calculs complexes avec des instances puissantes, équipées de GPU. L'outil se c
 ## Fonctionnalités
 Cet outils offre :
 - la possibilité d'indiquer le cycle de vie de l'instance à la fin du traitement
-    - La laisser vivante (des frais supplémentaires sont appliqués par Amazon),
-    - la sauvegarder et l'arreter (des frais moins élevé sont appliqués par Amazon)
     - l'interrompre et la détuire (pas de frais supplémentaires)
+    - la laisser vivante (des frais supplémentaires sont appliqués par Amazon),
+    - la sauvegarder et l'arreter (des frais moins élevés sont appliqués par Amazon)
 - de choisir l'image AMI à utiliser, le type de l'instance, la clé SSH, la région, etc. 
 - Offre différents moyens de gérer le multi-session sur l'instance
     - pas de multi-sessions (par défaut)
@@ -29,7 +29,7 @@ sur l'instance EC2, avant de lancer le traitement directement dans le répertoir
     - Après le traitement, pour récupérer tous les nouveaux fichiers ou les fichiers modifiés
 - De limiter les droits accordés à l'instance
 - De permettre un accès direct aux fichiers S3 (et au autres services AWS), 
-sans devoir injecter les credential dans l'instance (`aws s3 ls s3://mybucket`)
+sans devoir injecter les *credentials* dans l'instance (`aws s3 ls s3://mybucket`)
 - D'ajouter des tags aux instances
 - ...
 
@@ -53,46 +53,20 @@ Puis installer:
 bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sources)
 - soit faire un copie dans `/usr/bin` (`make install`)
 
-## Pré-requis sur AWS pour l'administrateur
-Pour utiliser l'outil `ssh-ec2`, il faut demander à l'administrateur AWS de créer :
-- une stratégie/policy [SshEc2Access](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/SshEc2Access.policy) pour permettre 
-la création d'instances EC2, 
-et le droit de donner un rôle à l'instance ([iam:PassRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html)). 
-Elle sera associée à un groupe ou aux utilisateurs souhaitant pouvoir utiliser `ssh-ec2`.
-Les ressources accessibles peuvent être restreintes si besoins.
-     
-- Des rôles, pour le service **EC2**, à associer aux instances EC2 qui seront construites par `ssh-ec2`.
-Par exemple:
-- Dans IAM
-    - Un role [EC2ReadOnlyAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png), 
-    pour le service **EC2**, avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
-    ![AmazonEC2ReadOnlyAccess](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png)
-    - Un role [EC2FullAccessToS3](EC2FullAccessToS3.png), pour le service **EC2**, 
-    avec la stratégie `AmazonEC2FullAccess`
-    ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2FullAccessToS3.png)
-    - Un role pour le service EC2, limité aux certains _buckets_
-    - ...
-    - un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
-![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateNewGroup.png)
-    - puis y associer les utilisateurs habilités à utiliser l'outil.
-![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/AssociateGroups.png)
-- Dans EC2 sur chaque région
-    - Créer un group de sécurité `SshEC2`. Il sera associé aux instances EC2 créées.
-![CreateSecurityGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateSecurityGroup.png)
-
-
 ## Pré-requis sur AWS pour l'utilisateur
 L'utilisateur de `ssh-ec2` doit :
 - avoir un compte AWS
 - appartenir au group `SshEc2`
 - installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
-```bash
-$ pip3 install awscli --upgrade --user
-$ aws --version
 
-```
+    ```bash
+    $ pip3 install awscli --upgrade --user
+    $ aws --version    
+    ```
+    
 - [créer une paire de clé](https://help.bittitan.com/hc/en-us/articles/115008255268-How-do-I-find-my-AWS-Access-Key-and-Secret-Access-Key-)
 - [configurer](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html) aws
+
 ```bash
 $ aws configure
 AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
@@ -100,12 +74,14 @@ AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 Default region name [None]: eu-west-1
 Default output format [None]: json
 ```
-- valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent 
+- Valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent 
+
 ```bash
 $ echo export TRIGRAM=PPR >>~/.bashrc
 $ . ~/.bashrc
 ```
 - Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
+
 ```bash
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 2048
 Generating public/private ecdsa key pair.
@@ -129,6 +105,7 @@ The key's randomart image is:
 +----[SHA256]-----+
 ```
 - Récupérer la clé publique
+
 ```bash
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -y
 Enter passphrase: 
@@ -137,13 +114,47 @@ EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7
 2WWetHjrc+SdkXyTFQ==
 ```
 - La copier dans le press-papier
-- importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
+- Importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
+
 ![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/ImportKeyPair.png?raw=true "ImportKeyPair")
+
 - Normalement, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
 Sinon, consultez la document de [ssh-agent](https://www.ssh.com/ssh/agent)
 
 A défaut de `TRIGRAM`, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environnement `AWS_KEY_NAME`.
+
+## Pré-requis sur AWS pour l'administrateur
+Pour utiliser l'outil `ssh-ec2`, il faut demander à l'administrateur AWS de créer :
+- une stratégie/policy [SshEc2Access](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/SshEc2Access.policy) pour permettre 
+la création d'instances EC2, 
+et le droit de donner un rôle à l'instance ([iam:PassRole](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_passrole.html)). 
+Elle sera associée à un groupe ou aux utilisateurs souhaitant pouvoir utiliser `ssh-ec2`.
+Les ressources accessibles peuvent être restreintes si besoins.
+     
+- Des rôles, pour le service **EC2**, à associer aux instances EC2 qui seront construites par `ssh-ec2`.
+Par exemple:
+- Dans IAM
+    - Un role [EC2ReadOnlyAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png), 
+    pour le service **EC2**, avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
+
+    ![AmazonEC2ReadOnlyAccess](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png)
+    - Un role [EC2FullAccessToS3](EC2FullAccessToS3.png), pour le service **EC2**, 
+    avec la stratégie `AmazonEC2FullAccess`
+
+    ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2FullAccessToS3.png)
+    - Un role pour le service EC2, limité aux certains _buckets_
+    - ...
+    - Un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
+
+![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateNewGroup.png)
+    - puis y associer les utilisateurs habilités à utiliser l'outil.
+
+![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/AssociateGroups.png)
+- Dans EC2 sur chaque région
+    - Créer un group de sécurité `SshEC2`. Il sera associé aux instances EC2 créées.
+
+![CreateSecurityGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateSecurityGroup.png)
 
 
 ## Utilisation
@@ -162,13 +173,16 @@ Voici les valeurs par défaut des principaux paramètres proposé par l'outil.
 Notez que pour ajouter un script d'initialisation de la VM, il faut :
 - soit utiliser un fichier (`file://....sh`)
 - soit utiliser un script complet AVEC shebang
+
 ```bash
-export AWS_USER_DATA="#!/usr/bin/env bash \
-source activate $(VENV_AWS) \
-conda install 'make>=4' -y"
+export AWS_USER_DATA='#!/usr/bin/env bash
+source activate $(VENV_AWS)
+conda install 'make>=4' -y'
+echo -e "$AWS_USER_DATA"
 ```
 
 Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnement
+
 ```bash
 export AWS_INSTANCE_TYPE=t2.small
 export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
@@ -211,7 +225,7 @@ Pour indiquer le comportement que doit avoir l'instance EC2 à la fin de la sess
 il faut utiliser 
 - `--leave` (ou `-l`) pour laisser instance vivante
 - `--stop` (ou `-s`) pour la sauvegarder et l'arréter
-- ou `--terminate` (ou `-t`) (par défaut) pour la supprimer.
+- ou `--terminate` (ou `-t` - par défaut) pour la supprimer.
 
 ```bash
 ssh-ec2 --stop "source activate cntk_p36 ; make train" # Sauve et arrète l'instance après le traitement
@@ -314,6 +328,7 @@ pour installer le nécessaire avant le traitement.
 # Bonus
 De nombreuses recettes utils pour un Datascientist sont présente dans le 
 [Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
+
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.
 Contactez moi (ppr@octo.com)
