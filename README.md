@@ -173,30 +173,28 @@ Voici les valeurs par défaut des principaux paramètres proposé par l'outil.
 Notez que pour ajouter un script d'initialisation de la VM, il faut :
 - soit utiliser un fichier (`file://....sh`)
 - soit utiliser un script complet AVEC shebang
-
-```bash
-export AWS_USER_DATA='#!/usr/bin/env bash
-source activate $(VENV_AWS)
-conda install 'make>=4' -y'
-echo -e "$AWS_USER_DATA"
-```
+    ```bash
+    export AWS_USER_DATA='#!/usr/bin/env bash
+    source activate $(VENV_AWS)
+    conda install 'make>=4' -y'
+    echo -e "$AWS_USER_DATA"
+    ```
 
 Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnement
-
-```bash
-export AWS_INSTANCE_TYPE=t2.small
-export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
-export AWS_REGION=eu-west-1
-```
+    ```bash
+    export AWS_INSTANCE_TYPE=t2.small
+    export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+    export AWS_REGION=eu-west-1
+    ```
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
 
 Pour avoir un rapide rappel des paramètres de la ligne de commande :
-```bash
-$ ssh-ec2 --help
-ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \ 
- [--multi <tmux|screen|none>] \ 
- [-i <pem file>] [-[LR] port:host:port] [cmds*]
-```
+    ```bash
+    $ ssh-ec2 --help
+    ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \ 
+     [--multi <tmux|screen|none>] \ 
+     [-i <pem file>] [-[LR] port:host:port] [cmds*]
+    ```
 
 ### Fin de vie de l'instance EC2
 Un simple lancement de `ssh-ec2` permet d'avoir une session `bash`
@@ -204,22 +202,22 @@ sur une instance EC2 qui sera détruire à la sortie du terminal.
 
 #### Utilisation synchrone
 Les paramètres sont interprétés comme une commande à exécuter (comme avec un `ssh` classique).
-```bash
-ssh-ec2 who am i # Invoke 'who am i' on EC2
-
-----------------------------------------------------------
-EC2 Name: PPR-ssh-ec2
-Region:   eu-central-1
-Type:     p2.xlarge
-Image Id: ami-002b6c63ff04afa5f (Deep Learning AMI (Ubuntu)*)
-Key name: PPR
-Tags:     User=pprados, Name=PPR-ssh-ec2, Trigram=PPR, Hostname=PPR-OCTO
-----------------------------------------------------------
-Synchronizes current directory (except files in .rsyncignore)... 
-ssh ubuntu@52.57.165.31 ...
-ubuntu   pts/0        2019-03-11 15:31 (82.238.92.100)
-Synchronizes result... done
-```
+    ```bash
+    ssh-ec2 who am i # Invoke 'who am i' on EC2
+    
+    ----------------------------------------------------------
+    EC2 Name: PPR-ssh-ec2
+    Region:   eu-central-1
+    Type:     p2.xlarge
+    Image Id: ami-002b6c63ff04afa5f (Deep Learning AMI (Ubuntu)*)
+    Key name: PPR
+    Tags:     User=pprados, Name=PPR-ssh-ec2, Trigram=PPR, Hostname=PPR-OCTO
+    ----------------------------------------------------------
+    Synchronizes current directory (except files in .rsyncignore)... 
+    ssh ubuntu@52.57.165.31 ...
+    ubuntu   pts/0        2019-03-11 15:31 (82.238.92.100)
+    Synchronizes result... done
+    ```
 
 Pour indiquer le comportement que doit avoir l'instance EC2 à la fin de la session,
 il faut utiliser 
@@ -238,13 +236,13 @@ s'il est le dernier à y avoir accès.
 
 #### Utilisation asynchrone
 Il est possible de lancer une commande et de détacher imédiatement le terminal. L'instance reste vivante.
-```bash
-ssh-ec2 --detach "while sleep 1; do echo thinking; done" # Return immediately
-```
+    ```bash
+    ssh-ec2 --detach "while sleep 1; do echo thinking; done" # Return immediately
+    ```
 un appel avec `--attach` permet de se rattacher au terminal
-```bash
-ssh-ec2 --attach 
-```
+    ```bash
+    ssh-ec2 --attach 
+    ```
 Suivant l'utilitaire de multiplexage, il faut utiliser `Ctrl-B d` (tmux) ou `Ctrl-A d` (screen) pour
 se détacher de la session en la laissant vivante. 
 Référez-vous à la documentation de ces outils pour en savoir plus.
