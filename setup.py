@@ -33,4 +33,6 @@ setup(
         'scikit-learn~=0.19',
         'spacy~=2.0',
         'nltk~=3.3',
-    ])
+    ],
+    #test_suite="tests",
+)

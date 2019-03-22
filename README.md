@@ -1,10 +1,6 @@
 # ssh-ec2
 Un utilitaire pour augmenter la puissance de sa machine, grâce à AWS.
 
-TODO: 
-- Le security pour admin
-- la création et la diffusion des clés
-
 ## Qu'est-ce que c'est ?
 `ssh-ec2` est un script bash, permettant de faciliter l'utilisation du cloud AWS pour la réalisation de 
 calculs complexes avec des instances puissantes, équipées de GPU. L'outil se charge de :
@@ -53,7 +49,7 @@ $ git clone https://gitlab.octo.com/pprados/ssh-ec2.git
 $ cd ssh-ec2
 ```
 Puis installer:
-- soit un lien symbolique vers le source (`make install-with-link`) pour 
+- soit un lien symbolique vers le source (`make install-with-ln`) pour 
 bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sources)
 - soit faire un copie dans `/usr/bin` (`make install`)
 
