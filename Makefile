@@ -27,6 +27,15 @@ SHELL=/bin/bash
 .SHELLFLAGS = -e -c
 .ONESHELL:
 
+
+## ---------------------------------------------------------------------------------------
+# SNIPPET pour détecter l'OS d'exécution.
+ifeq ($(OS),Windows_NT)
+    OS := Windows
+else
+    OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
+endif
+
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour détecter la présence d'un GPU afin de modifier le nom du projet
 # et ses dépendances si nécessaire.
@@ -57,6 +66,7 @@ PYTHON_VERSION:=3.6
 # Cela servira à gérer automatiquement les environnements.
 # Pour que cela fonctionne, il faut avoir un environement Conda actif,
 # identifié par la variable CONDA_PREFIX.
+CONDA_BASE=$(conda info --base)
 CONDA_PACKAGE:=$(CONDA_PREFIX)/lib/python$(PYTHON_VERSION)/site-packages
 CONDA_PYTHON:=$(CONDA_PREFIX)/bin/python
 PIP_PACKAGE:=$(CONDA_PACKAGE)/$(PRJ_PACKAGE).egg-link
@@ -65,6 +75,7 @@ PIP_PACKAGE:=$(CONDA_PACKAGE)/$(PRJ_PACKAGE).egg-link
 # SNIPPET pour ajouter des repositories complémentaires à PIP
 EXTRA_INDEX:=--extra-index-url=https://pypi.anaconda.org/octo/label/dev/simple
 
+## ---------------------------------------------------------------------------------------
 # Ici, il faut indiquer toutes les règles du Makefile n'étant pas
 # reliée à un fichier. Ainsi, l'absence d'un ficheir 'help' par exemple, n'est pas
 # le signe qu'il faut appliquer la règle.
@@ -90,7 +101,7 @@ EXTRA_INDEX:=--extra-index-url=https://pypi.anaconda.org/octo/label/dev/simple
 help: ## Print all majors target
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	printf "\e[36m%-20s\e[0m %s\n" "build-<dir>" "Execute notebooks in notebooks/<dir>\n"
-	printf "\e[36m%-20s\e[0m %s\n" "build-*" "Execute all notebooks\n"
+	printf "\e[36m%-20s\e[0m %s\n" "'build-*'" "Execute all notebooks\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-<target>" "Apply <target> receipt on EC2 instance\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-tmux-<target>" "Apply <target> receipt on EC2 instance with tmux activated\n"
 	printf "\e[36m%-20s\e[0m %s\n" "ec2-detach-<target>" "Apply <target> receipt on EC2 instance and detach the shell\n"
@@ -126,7 +137,7 @@ dump-%:
 
 # S'assure de la présence de git (util en cas de synchronisation sur le cloud par exemple)
 .git:
-	git init
+	@git init
 
 # Purge notebook for git. Used by .gitattribute
 pipe_clear_jupyter_output:
@@ -137,14 +148,14 @@ pipe_clear_jupyter_output:
 	@git config --local core.autocrlf input
 	# Set tabulation to 4 when use 'git diff'
 	@git config --local core.page 'less -x4'
+	@git lfs install
 
 	# Add rules to manage the output data of notebooks
 	@git config --local filter.dropoutput_jupyter.clean "make --silent pipe_clear_jupyter_output"
 	@git config --local filter.dropoutput_jupyter.smudge cat
 	@[ -e .gitattributes ] && grep -v dropoutput_jupyter .gitattributes >.gitattributes.new 2>/dev/null || true
 	@[ -e .gitattributes.new ] && mv .gitattributes.new .gitattributes || true
-	@echo "*.ipynb filter=dropoutput_jupyter" >>.gitattributes
-	@echo "*.ipynb diff=dropoutput_jupyter" >>.gitattributes
+	@echo "*.ipynb filter=dropoutput_jupyter diff=dropoutput_jupyter -text" >>.gitattributes
 
 ifeq ($(shell which daff >/dev/null ; echo "$$?"),0)
 	# Add rules to manage diff with daff for CSV file
@@ -153,8 +164,7 @@ ifeq ($(shell which daff >/dev/null ; echo "$$?"),0)
 	@git config --local merge.daff-csv.driver "daff.py merge --output %A %O %A %B"
 	@[ -e .gitattributes ] && grep -v daff-csv .gitattributes >.gitattributes.new 2>/dev/null
 	@[ -e .gitattributes.new ] && mv .gitattributes.new .gitattributes
-	@echo "*.[tc]sv diff=daff-csv" >>.gitattributes
-	@echo "*.[tc]sv merge=daff-csv" >>.gitattributes
+	@echo "*.[tc]sv diff=daff-csv merge=daff-csv -text" >>.gitattributes
 endif
 	@echo ".gitattributes updated"
 
@@ -170,10 +180,11 @@ endif
 CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
   then ( echo -e "\e[91mUse: \e[36mconda activate $(VENV)\e[91m before using 'make'\e[0m"; exit 1 ) ; fi
 
-ACTIVATE_VENV=conda activate $(VENV)
+ACTIVATE_VENV=source activate $(VENV)
+DEACTIVATE_VENV=source deactivate $(VENV)
 
-VALIDATE_VENV=$(CHECK_VENV)
-#VALIDATE_VENV=$(ACTIVATE_VENV)
+#VALIDATE_VENV=$(CHECK_VENV)
+VALIDATE_VENV=$(ACTIVATE_VENV)
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour gérer correctement toute les dépendances python du projet.
@@ -198,7 +209,7 @@ requirements: \
 		$(CONDA_PACKAGE)/spacy/data/en \
 		nltk-database \
 		spacy-database \
-		~/.local/share/jupyter/kernels/$(KERNEL)
+		$(shell jupyter --data-dir)/kernels/$(KERNEL)
 
 # Règle de vérification de la bonne installation de la version de python dans l'environnement Conda
 $(CONDA_PYTHON):
@@ -209,34 +220,57 @@ $(CONDA_PYTHON):
 # des dépendances décrites dans `setup.py`
 $(PIP_PACKAGE): $(CONDA_PYTHON) setup.py | .git # Install pip dependencies
 	$(VALIDATE_VENV)
-	pip install -e .[tests] | grep -v 'already satisfied' || true
+	pip install -e '.[tests]' | grep -v 'already satisfied' || true
 	@touch $(PIP_PACKAGE)
 
 # Règle d'installation du Kernel pour Jupyter
-~/.local/share/jupyter/kernels/$(KERNEL): $(PIP_PACKAGE)
+$(shell jupyter --data-dir)/kernels/$(KERNEL): $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
 	python -m ipykernel install --user --name $(KERNEL)
 
 # Règle de suppression du kernel
 remove-kernel:
 	$(VALIDATE_VENV)
-	jupyter kernelspec uninstall $(KERNEL)
+	echo y | jupyter kernelspec uninstall $(KERNEL) || true
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour récupérer les bases de données de nltk.
-# Ci-dessous, la recette pour lister toutes les bases
-nltk-database: \
-	~/nltk_data/tokenizers/punkt \
-	~/nltk_data/corpora/stopwords
+# Ci-dessous, la recette pour lister toutes les bases.
+# Vous pouvez valoriser NLTK_DATA https://www.nltk.org/data.html
+
+ifndef NLTK_DATA
+# La ligne suivante ralentie le Makefile. A activer qu'avec des env. spécifiques.
+#NLTK_DATA:=$(shell python -c "import nltk.data; print(nltk.data.path[0])" 2>/dev/null || true)
+export NTLK_DATA
+ifeq ($(NLTK_DATA),)
+ifeq ($(OS),Darwin)
+NLTK_DATA=/usr/local/share/nltk_data
+else ifeq ($(OS),Windows)
+NLTK_DATA=C:/nltk_data
+else
+NLTK_DATA=~/nltk_data
+endif
+endif
+endif
+
+# Ajoutez ici les bases de données supplémentaires.
+# Par exemple, ajoutez
+# $(NLTK_DATA)/corpora/wordnet
+# et c'est tout.
+nltk-database: $(PIP_PACKAGE) \
+	$(NLTK_DATA)/tokenizers/punkt \
+	$(NLTK_DATA)/corpora/stopwords
 
 # Les recettes génériques de downloads
-~/nltk_data/tokenizers/%: $(PIP_PACKAGE)
+$(NLTK_DATA)/tokenizers/%: $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
+	echo "--------- Je download nltk..."
 	python -m nltk.downloader $*
 	touch ~/nltk_data/tokenizers/$*
 
-~/nltk_data/corpora/%: $(PIP_PACKAGE)
+$(NLTK_DATA)/corpora/%: $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
+	echo "--------- Je download nltk..."
 	python -m nltk.downloader $*
 	touch ~/nltk_data/corpora/$*
 
@@ -244,7 +278,11 @@ nltk-database: \
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour récupérer les bases de données de spacy.
 # Ci-dessous, la recette pour lister toutes les bases
-spacy-database: \
+# Ajoutez les bases complémentaires.
+# Par exemple :
+# $(CONDA_PACKAGE)/spacy/data/fr
+# et c'est tout.
+spacy-database: $(PIP_PACKAGE) \
 	$(CONDA_PACKAGE)/spacy/data/en
 
 # La recette générique de téléchargement
@@ -257,14 +295,18 @@ $(CONDA_PACKAGE)/spacy/data/%: $(PIP_PACKAGE)
 # SNIPPET pour préparer l'environnement d'un projet juste après un `git clone`
 configure: ## Prepare the environment (conda venv, kernel, ...)
 	@conda create --name "$(VENV)" python=$(PYTHON_VERSION) -y
-	source activate "$(VENV)"
+	$(ACTIVATE_VENV)
+	env
+	echo "$(MAKE) $${CONDA_PREFIX}/lib/python$(PYTHON_VERSION)/site-packages/$(PRJ_PACKAGE).egg-link"
+	read -p "..."
+	$(MAKE) $${CONDA_PREFIX}/lib/python$(PYTHON_VERSION)/site-packages/$(PRJ_PACKAGE).egg-link
 	$(MAKE) requirements
-	echo -e "Use: conda activate $(VENV)"
+	echo -e "Use: \e[36mconda activate $(VENV)\e[0m"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour supprimer l'environnement conda
 remove-venv remove-$(VENV): ## Remove venv
-	@source deactivate
+	@$(DEACTIVATE_VENV)
 	conda env remove --name "$(VENV)" -y
 	echo -e "Use: \e[36mconda deactivate\e[0m"
 
@@ -320,7 +362,7 @@ clean-pip: # Remove all the pip package
 # SNIPPET pour nettoyer complètement l'environnement Conda
 clean-venv clean-$(VENV):  ## Set the current VENV empty
 	@echo -e "\\e[36mClean virtualenv $(VENV)...\\e[0m"
-	source deactivate
+	$(DEACTIVATE_VENV)
 	conda env remove -y -n $(VENV) -q >/dev/null ; \
 	echo -e "\\e[36mRe-create virtualenv $(VENV)...\\e[0m"
 	conda create -y -q -n $(VENV)
@@ -333,7 +375,7 @@ clean: clean-pyc clean-notebooks ## Clean current environment
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour faire le ménage du projet (hors environnement)
-clean-all: clean-$(VENV) ## Clean all environments
+clean-all: clean clean-venv remove-kernel ## Clean all environments
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour déclencher les tests unitaires
