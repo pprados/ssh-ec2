@@ -181,12 +181,26 @@ conda install 'make>=4' -y'
 echo -e "$AWS_USER_DATA"
 ```
 
-Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnement
-    ```bash
-    export AWS_INSTANCE_TYPE=t2.small
-    export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
-    export AWS_REGION=eu-west-1
+Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnements
+```bash
+export AWS_INSTANCE_TYPE=p2.xlarge
+export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+export AWS_REGION=eu-west-1
     ```
+Vous pouvez également valoriser ces variables dans un fichier `.env`
+```bash
+# File .env
+AWS_INSTANCE_TYPE=t2.small
+AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+AWS_REGION=eu-west-1
+```
+Dans ce cas, ces variables sont moins prioritaire que les paramètres valorisés
+en dehors. Par exemple :
+```bash
+AWS_REGION=eu-est-1 ssh-ec2
+```
+permet de forcer une autre région.
+
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
 
 Pour avoir un rapide rappel des paramètres de la ligne de commande :

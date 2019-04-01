@@ -7,10 +7,9 @@
 # 	ln -s Makefile configure
 # 	ln -s Makefile test
 # 	ln -s Makefile train
-#   ln -s Makefile ec2-ssh
+# 	./configure		# Execute make test
 # 	./test 			# Execute make test
 #   ./train 		# Train the model
-#   ./ec2-ssh	 	# Utilise les variables d'environnement du Makefile
 # Attention, il n'est pas possible de passer les paramètres aux liens
 
 # SNIPPET pour changer le mode de gestion du Makefile.
@@ -46,6 +45,17 @@ USE_GPU:=-gpu
 else ifdef CUDA_PATH
 USE_GPU:=-gpu
 endif
+
+# Manage colors...
+normal:=$(shell tput sgr0)
+red:=$(shell tput setaf 1)
+green:=$(shell tput setaf 2)
+yellow:=$(shell tput setaf 3)
+blue:=$(shell tput setaf 4)
+purple:=$(shell tput setaf 5)
+cyan:=$(shell tput setaf 6)
+white:=$(shell tput setaf 7)
+gray:=$(shell tput setaf 8)
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour gérer le projet, le virtualenv et le kernel
@@ -99,15 +109,15 @@ EXTRA_INDEX:=--extra-index-url=https://pypi.anaconda.org/octo/label/dev/simple
 .DEFAULT: help
 
 help: ## Print all majors target
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-	printf "\e[36m%-20s\e[0m %s\n" "build-<dir>" "Execute notebooks in notebooks/<dir>\n"
-	printf "\e[36m%-20s\e[0m %s\n" "'build-*'" "Execute all notebooks\n"
-	printf "\e[36m%-20s\e[0m %s\n" "ec2-<target>" "Apply <target> receipt on EC2 instance\n"
-	printf "\e[36m%-20s\e[0m %s\n" "ec2-tmux-<target>" "Apply <target> receipt on EC2 instance with tmux activated\n"
-	printf "\e[36m%-20s\e[0m %s\n" "ec2-detach-<target>" "Apply <target> receipt on EC2 instance and detach the shell\n"
-	echo -e "Use '\e[36mmake -jn ...\e[0m' for Parallel run"
-	echo -e "Use '\e[36mmake -B ...\e[0m' to force the target"
-	echo -e "Use '\e[36mmake -n ...\e[0m' to simulate the build"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(cyan)%-20s$(normal) %s\n", $$1, $$2}'
+	printf "$(cyan)%-20s$(normal) %s\n" "build-<dir>" "Execute notebooks in notebooks/<dir>\n"
+	printf "$(cyan)%-20s$(normal) %s\n" "'build-*'" "Execute all notebooks\n"
+	printf "$(cyan)%-20s$(normal) %s\n" "ec2-<target>" "Apply <target> receipt on EC2 instance\n"
+	printf "$(cyan)%-20s$(normal) %s\n" "ec2-tmux-<target>" "Apply <target> receipt on EC2 instance with tmux activated\n"
+	printf "$(cyan)%-20s$(normal) %s\n" "ec2-detach-<target>" "Apply <target> receipt on EC2 instance and detach the shell\n"
+	echo -e "Use '$(cyan)make -jn ...$(normal)' for Parallel run"
+	echo -e "Use '$(cyan)make -B ...$(normal)' to force the target"
+	echo -e "Use '$(cyan)make -n ...$(normal)' to simulate the build"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour affichier la valeur d'une variable d'environnement
@@ -178,7 +188,7 @@ endif
 # - VALIDATE_VENV pour forcer l'activation d'un VENV si besoin
 
 CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
-  then ( echo -e "\e[91mUse: \e[36mconda activate $(VENV)\e[91m before using 'make'\e[0m"; exit 1 ) ; fi
+  then ( echo -e "$(green)Use: $(cyan)conda activate $(VENV)$(green) before using 'make'$(normal)"; exit 1 ) ; fi
 
 ACTIVATE_VENV=source activate $(VENV)
 DEACTIVATE_VENV=source deactivate $(VENV)
@@ -230,8 +240,8 @@ $(shell jupyter --data-dir)/kernels/$(KERNEL): $(PIP_PACKAGE)
 
 # Règle de suppression du kernel
 remove-kernel:
-	$(VALIDATE_VENV)
-	echo y | jupyter kernelspec uninstall $(KERNEL) || true
+	@echo y | jupyter kernelspec uninstall $(KERNEL) 2>/dev/null || true
+	echo -e "$(yellow)Warning: Kernel $(KERNEL) uninstalled$(normal)"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour récupérer les bases de données de nltk.
@@ -264,13 +274,11 @@ nltk-database: $(PIP_PACKAGE) \
 # Les recettes génériques de downloads
 $(NLTK_DATA)/tokenizers/%: $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
-	echo "--------- Je download nltk..."
 	python -m nltk.downloader $*
 	touch ~/nltk_data/tokenizers/$*
 
 $(NLTK_DATA)/corpora/%: $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
-	echo "--------- Je download nltk..."
 	python -m nltk.downloader $*
 	touch ~/nltk_data/corpora/$*
 
@@ -295,20 +303,14 @@ $(CONDA_PACKAGE)/spacy/data/%: $(PIP_PACKAGE)
 # SNIPPET pour préparer l'environnement d'un projet juste après un `git clone`
 configure: ## Prepare the environment (conda venv, kernel, ...)
 	@conda create --name "$(VENV)" python=$(PYTHON_VERSION) -y
-	$(ACTIVATE_VENV)
-	env
-	echo "$(MAKE) $${CONDA_PREFIX}/lib/python$(PYTHON_VERSION)/site-packages/$(PRJ_PACKAGE).egg-link"
-	read -p "..."
-	$(MAKE) $${CONDA_PREFIX}/lib/python$(PYTHON_VERSION)/site-packages/$(PRJ_PACKAGE).egg-link
-	$(MAKE) requirements
-	echo -e "Use: \e[36mconda activate $(VENV)\e[0m"
+	echo -e "Use: $(cyan)conda activate $(VENV)$(normal)"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour supprimer l'environnement conda
 remove-venv remove-$(VENV): ## Remove venv
 	@$(DEACTIVATE_VENV)
 	conda env remove --name "$(VENV)" -y
-	echo -e "Use: \e[36mconda deactivate\e[0m"
+	echo -e "Use: $(cyan)conda deactivate$(normal)"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET de mise à jour des dernières versions des composants.
@@ -318,7 +320,7 @@ upgrade-venv upgrade-$(VENV): ## Upgrade packages to last versions
 	$(VALIDATE_VENV)
 	conda update --all
 	pip list --format freeze --outdated | sed 's/(.*//g' | xargs -r -n1 pip install -U
-	echo -e "\e[36mAfter validation, upgrade the setup.py\e[0m"
+	echo -e "$(cyan)After validation, upgrade the setup.py$(normal)"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET de validation des notebooks en les ré-executants.
@@ -361,13 +363,13 @@ clean-pip: # Remove all the pip package
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour nettoyer complètement l'environnement Conda
 clean-venv clean-$(VENV):  ## Set the current VENV empty
-	@echo -e "\\e[36mClean virtualenv $(VENV)...\\e[0m"
+	@echo -e "$(cyan)Clean virtualenv $(VENV)...$(normal)"
 	$(DEACTIVATE_VENV)
 	conda env remove -y -n $(VENV) -q >/dev/null ; \
-	echo -e "\\e[36mRe-create virtualenv $(VENV)...\\e[0m"
+	echo -e "$(cyan)Re-create virtualenv $(VENV)...$(normal)"
 	conda create -y -q -n $(VENV)
 	touch setup.py
-	echo -e "\\e[32mWarning: Conda virtualenv $(VENV) is empty.\\e[0m"
+	echo -e "$(yellow)Warning: Conda virtualenv $(VENV) is empty.$(normal)"
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour faire le ménage du projet (hors environnement)
@@ -418,20 +420,24 @@ EC2_LIFE_CYCLE=--terminate
 
 # Recette permettant un 'make ec2-test'
 ec2-%: ## call make recipe on EC2
-	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:ec2-%=%)"
+	$(VALIDATE_VENV)
+	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
 
 # Recette permettant d'exécuter une recette avec un tmux activé.
 # Par exemple `make ec2-tmux-train`
 ec2-tmux-%: ## call make recipe on EC2 with a tmux session
-	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; make $(*:ec2-tmux-%=%)"
+	$(VALIDATE_VENV)
+	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-tmux-%=%)"
 
 # Recette permettant un 'make ec2-detach-test'
 # Il faut faire un ssh-ec2 --finish pour rapatrier les résultats à la fin
 ec2-detach-%: ## call make recipe on EC2 and detach immediatly
-	ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; make $(*:ec2-detach-%=%)"
+	$(VALIDATE_VENV)
+	ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-detach-%=%)"
 
 # Recette pour lancer un jupyter notebook sur EC2
 ec2-notebook: ## Start jupyter notebook on EC2
+	$(VALIDATE_VENV)
 	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 
 # Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile (`make ec2-ssh`)
