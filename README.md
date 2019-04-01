@@ -182,12 +182,15 @@ echo -e "$AWS_USER_DATA"
 ```
 
 Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnements
+
 ```bash
 export AWS_INSTANCE_TYPE=p2.xlarge
 export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
 export AWS_REGION=eu-west-1
-    ```
+```
+
 Vous pouvez également valoriser ces variables dans un fichier `.env`
+
 ```bash
 # File .env
 AWS_INSTANCE_TYPE=t2.small

@@ -55,9 +55,9 @@
 set -e # Detect all errors
 shopt -s extglob
 
-CREATE_SECURITY_GROUP=no
 # Defautl security group
 AWS_SECURITY_GROUP=SshEC2
+CREATE_SECURITY_GROUP=no
 
 # ----------- For debug
 if [[ "${DEBUG}" == y ]]; then
@@ -303,15 +303,16 @@ fi
 if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
   AWS_NAME_INSTANCE=${AWS_KEY_NAME}-${CWBD}
 fi
-#if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
-#  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
-#fi
+if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
+  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
+fi
 
 
 AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE=${AWS_NAME_INSTANCE}}
 AWS_RSYNC_DIR=${AWS_RSYNC_DIR=${CWBD}}
 AWS_IAM_INSTANCE_PROFILE=${AWS_IAM_INSTANCE_PROFILE=${_DEFAULT_IAM_INSTANCE_PROFILE}}
 AWS_SECURITY_GROUP=${AWS_SECURITY_GROUP=${_DEFAULT_SECURITY_GROUP}}
+
 if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
     AWS_IAM_INSTANCE_PROFILE="--iam-instance-profile Name=${AWS_IAM_INSTANCE_PROFILE}"
 else
@@ -414,7 +415,7 @@ function nb_of_instance() {
 function finish() {
     trap - EXIT
     trap_with_arg abort INT
-    [[ "${DEBUG}" == y ]] && read -p "CONFIRM FINISH ?"
+    [[ "${DEBUG}" == y ]] && read -p "Confirm FINISH ?"
 
     # Only the last instance of ssh manage the final state
     if [[ "${nb_of_instance}" < 2 ]] ; then

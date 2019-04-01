@@ -445,14 +445,16 @@ ec2-ssh: ## Start ssh session on EC2 with parameters in current Makefile
 	ssh-ec2 --leave
 
 ## ---------------------------------------------------------------------------------------
-install: ## Installe une copie de ssh-ec2 dans /usr/bin
-	sudo rm -f /usr/bin/ssh-ec2
-	sudo cp ssh-ec2 /usr/bin
-	sudo chmod go+rx /usr/bin/ssh-ec2
+install: uninstall ## Installe une copie de ssh-ec2 dans /usr/local/bin
+	sudo rm -f /usr/local/bin/ssh-ec2
+	sudo cp ssh-ec2 /usr/local/bin
+	sudo chmod go+rx /usr/local/bin/ssh-ec2
 
-install-with-ln: ## Installe dans /usr/bin, un lien vers le source de ssh-ec2
-	sudo rm -f /usr/bin/ssh-ec2
-	sudo ln -s $(shell pwd)/ssh-ec2 /usr/bin/ssh-ec2
+install-with-ln: uninstall ## Installe dans /usr/local/bin, un lien vers le source de ssh-ec2
+	sudo ln -s $(shell pwd)/ssh-ec2 /usr/local/bin/ssh-ec2
+
+uninstall: ## Supprime de /usr/local/bin
+	sudo rm -f /usr/local/bin/ssh-ec2
 
 ## ---------------------------------------------------------------------------------------
 # Simulation d'un train qui prend du temps
