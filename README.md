@@ -194,13 +194,13 @@ Vous pouvez également valoriser ces variables dans un fichier `.env`
 ```bash
 # File .env
 AWS_INSTANCE_TYPE=t2.small
-AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
+AWS_IMAGE_NAME=Deep Learning AMI (Amazon Linux)*
 AWS_REGION=eu-west-1
 ```
 Dans ce cas, ces variables sont moins prioritaire que les paramètres valorisés
 en dehors. Par exemple :
 ```bash
-AWS_REGION=eu-est-1 ssh-ec2
+AWS_REGION=eu-east-1 ssh-ec2
 ```
 permet de forcer une autre région.
 
@@ -235,7 +235,9 @@ Tags:     User=pprados, Name=PPR-ssh-ec2, Trigram=PPR, Hostname=PPR-OCTO
 ----------------------------------------------------------
 Synchronizes current directory (except files in .rsyncignore)... 
 ssh ubuntu@52.57.165.31 ...
+
 ubuntu   pts/0        2019-03-11 15:31 (82.238.92.100)
+
 Synchronizes result... done
 ```
 
@@ -246,7 +248,7 @@ il faut utiliser
 - ou `--terminate` (ou `-t` - par défaut) pour la supprimer.
 
 ```bash
-ssh-ec2 --stop "source activate cntk_p36 ; make train" # Sauve et arrète l'instance après le traitement
+ssh-ec2 --stop "source activate cntk_p36 ; VENV=cntk_p36 make train" # Sauve et arrète l'instance après le traitement
 ```
 
 Il est possible de rattraper une instance qui à vocation a être interrompu avec un `--stop` ou un `--terminate`.
