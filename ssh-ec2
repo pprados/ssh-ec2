@@ -95,7 +95,7 @@ fi
 . <( grep -v '^#' .env  | while read line; do
     key=$(echo $line | cut -d '=' -f 1)
     if [[ ! -z "$key" && -z "${!key}" ]]; then
-        echo $line | sed -r "s/=(.*)/='\1'/"
+        echo $line | sed -E "s/=(.*)/='\1'/"
     fi
     done
     )
@@ -122,9 +122,7 @@ _DEFAULT_RSYNC_QUIET=--quiet
 _DEFAULT_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2);"
 _DEFAULT_SECURITY_GROUP=SshEC2
 
-
-nb_of_instance=$(pgrep -fa bash | tr '\n' ' ' | grep -c ssh-ec2 )
-declare -A TAGS # The user can set somme additional tags
+declare -a TAGS # The user can set somme additional tags with syntax 'key::value'
 RSYNC_QUIET=${_DEFAULT_RSYNC_QUIET}
 
 # ----------- Analyse parameters
@@ -334,24 +332,28 @@ check=${AWS_IMAGE_ID?Image not found in the region ${AWS_REGION}}
 
 # Try to find the default username
 # See https://alestic.com/2014/01/ec2-ssh-username/
-declare -A _default_user
-_default_user["Amazon Linux"]="ec2-user"
-_default_user["ubuntu"]="ubuntu"
-_default_user["RHEL 6.[0-3]"]="root"
-_default_user["RHEL 6.[0-9]+"]="ec2-user"
-_default_user["Fedora"]="fedora"
-_default_user["Centos"]="centos"
-_default_user["SUSE"]="ec2-user"
-_default_user["BitNami"]="bitnami"
-_default_user["TurnKey"]="root"
-_default_user["NanoStack"]="ubuntu"
-_default_user["FreeBSD"]="ec2-user"
-_default_user["OmniOS"]="root"
+declare -a _default_user
+_default_user=(
+'Amazon Linux::ec2-user'
+'ubuntu::ubuntu'
+'RHEL 6.[0-3]::root'
+'RHEL 6.[0-9]+::ec2-user'
+'Fedora::fedora'
+'Centos::centos'
+'SUSE::ec2-user'
+'BitNami::bitnami'
+'TurnKey::root'
+'NanoStack::ubuntu'
+'FreeBSD::ec2-user'
+'OmniOS::root'
+)
 
 if [[ -z "${AWS_INSTANCE_USER}" ]]; then
-    for K in "${!_default_user[@]}"; do
+    for index in "${_default_user[@]}" ; do
+        K="${index%%::*}"
+        V="${index##*::}"
         if [[ "${AWS_IMAGE_NAME}" =~ "${K}" ]] ; then
-            AWS_INSTANCE_USER=${_default_user[${K}]}
+            AWS_INSTANCE_USER=${V}
             break
         fi
     done
@@ -361,19 +363,23 @@ AWS_INSTANCE_TYPE=${AWS_INSTANCE_TYPE=${_DEFAULT_INSTANCE_TYPE}}
 
 MULTIPLEX=${MULTIPLEX=${_DEFAULT_MULTIPLEX}}
 
-declare -A TAGS
-TAGS["Name"]="${AWS_NAME_INSTANCE}"
-TAGS["User"]="${USER}"
-TAGS["Hostname"]="$(hostname)"
+TAGS=(
+"Name::${AWS_NAME_INSTANCE}"
+"User::${USER}"
+"Hostname::$(hostname)"
+)
+
 if [ ! -z "${TRIGRAM}" ] ; then
-  TAGS["Trigram"]="${TRIGRAM}"
+    TAGS+="Trigram::${TRIGRAM}"
 fi
 
 _TAGS="["
 __tags=""
-for K in "${!TAGS[@]}"; do
-  _TAGS="${_TAGS}{Key=${K},Value=${TAGS[${K}]}},"
-  __tags="${__tags}${K}=${TAGS[${K}]}, "
+for index in "${TAGS[@]}" ; do
+    K="${index%%::*}"
+    V="${index##*::}"
+    _TAGS+="{Key=${K},Value=${V}},"
+    __tags+="${K}=${V}, "
 done
 _TAGS=${_TAGS%*,}"]"
 __tags=${__tags%*, }
@@ -409,7 +415,7 @@ function abort() {
 }
 
 function nb_of_instance() {
-    pgrep -fa bash | sed 's/\\\n/ /g' | grep ssh-ec2 | wc -l
+    pgrep -fa bash | sed 's/\\\n/ /g' | grep ssh-ec2 | wc -l || true
 }
 
 function finish() {
@@ -454,9 +460,9 @@ function finish() {
             *)
                 if [[ $nb_of_instance > 1 ]] ; then
                     AWS_FINAL_STATE=leave
-                    echo -e "${yellow}WARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active${normal}"
+                    echo -e "${red}WARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active${normal}"
                 else
-                    echo -e "${yellow}WARNING: The AWS EC instance ${AWS_NAME_INSTANCE} is alive${normal}" >&2
+                    echo -e "${red}WARNING: The AWS EC instance ${AWS_NAME_INSTANCE} is alive${normal}" >&2
                 fi
                 ;;
         esac

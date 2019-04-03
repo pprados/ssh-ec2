@@ -51,7 +51,7 @@ $ cd ssh-ec2
 Puis installer:
 - soit un lien symbolique vers le source (`make install-with-ln`) pour 
 bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sources)
-- soit faire un copie dans `/usr/bin` (`make install`)
+- soit faire un copie dans `/usr/local/bin` (`make install`)
 
 ## Pré-requis sur AWS pour l'utilisateur
 L'utilisateur de `ssh-ec2` doit :
@@ -116,7 +116,7 @@ EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7
 - La copier dans le press-papier
 - Importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
 
-![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/ImportKeyPair.png?raw=true "ImportKeyPair")
+![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/ImportKeyPair.png?raw=true "ImportKeyPair")
 
 - Normalement, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
 Sinon, consultez la document de [ssh-agent](https://www.ssh.com/ssh/agent)
@@ -135,26 +135,26 @@ Les ressources accessibles peuvent être restreintes si besoins.
 - Des rôles, pour le service **EC2**, à associer aux instances EC2 qui seront construites par `ssh-ec2`.
 Par exemple:
 - Dans IAM
-    - Un role [EC2ReadOnlyAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png), 
+    - Un role [EC2ReadOnlyAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/EC2ReadOnlyAccessToS3.png), 
     pour le service **EC2**, avec la stratégie `AmazonEC2ReadOnlyAccess` (utilisé par défaut par `ssh-ec2`)
 
-    ![AmazonEC2ReadOnlyAccess](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2ReadOnlyAccessToS3.png)
-    - Un role [EC2FullAccessToS3](EC2FullAccessToS3.png), pour le service **EC2**, 
+    ![AmazonEC2ReadOnlyAccess](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/EC2ReadOnlyAccessToS3.png)
+    - Un role [EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/EC2FullAccessToS3.png), pour le service **EC2**, 
     avec la stratégie `AmazonEC2FullAccess`
 
-    ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/EC2FullAccessToS3.png)
+    ![EC2FullAccessToS3](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/EC2FullAccessToS3.png)
     - Un role pour le service EC2, limité aux certains _buckets_
     - ...
     - Un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`, 
 
-![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateNewGroup.png)
+![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/CreateNewGroup.png)
     - puis y associer les utilisateurs habilités à utiliser l'outil.
 
-![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/AssociateGroups.png)
+![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/AssociateGroups.png)
 - Dans EC2 sur chaque région
     - Créer un group de sécurité `SshEC2`. Il sera associé aux instances EC2 créées.
 
-![CreateSecurityGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/CreateSecurityGroup.png)
+![CreateSecurityGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/CreateSecurityGroup.png)
 
 
 ## Utilisation
@@ -259,7 +259,7 @@ s'il est le dernier à y avoir accès.
 #### Utilisation asynchrone
 Il est possible de lancer une commande et de détacher imédiatement le terminal. L'instance reste vivante.
 ```bash
-ssh-ec2 --detach "while sleep 1; do echo thinking; done" # Return immediately
+ssh-ec2 --detach "while sleep 1; do echo $(date) thinking; done" # Return immediately
 ```
 un appel avec `--attach` permet de se rattacher au terminal
 ```bash

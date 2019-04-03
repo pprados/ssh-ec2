@@ -400,11 +400,7 @@ validate: test build-* ## Validate the version before commit
 # Quel venv utilisé sur l'instance EC2 ?
 VENV_AWS=cntk_p36
 
-# Quels type d'instance
-export AWS_INSTANCE_TYPE=t2.small
-export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
-export AWS_REGION=eu-central-1
-export AWS_IAM_INSTANCE_PROFILE=EC2ReadOnlyAccessToS3
+# Initialisation de l'instance
 export AWS_USER_DATA
 # Les deux premières lignes permettent d'avoir une trace de l'initialisation
 # de l'instance EC2 sur /tmp/user-data.log
@@ -445,16 +441,21 @@ ec2-ssh: ## Start ssh session on EC2 with parameters in current Makefile
 	ssh-ec2 --leave
 
 ## ---------------------------------------------------------------------------------------
+#TARGET_INSTALL:=~/.local/bin
+TARGET_INSTALL:=/usr/local/bin
 install: uninstall ## Installe une copie de ssh-ec2 dans /usr/local/bin
-	sudo rm -f /usr/local/bin/ssh-ec2
-	sudo cp ssh-ec2 /usr/local/bin
-	sudo chmod go+rx /usr/local/bin/ssh-ec2
+	@sudo cp ssh-ec2 $(TARGET_INSTALL)
+	@sudo chmod go+rx $(TARGET_INSTALL)/ssh-ec2
+	@echo "ssh-ec2 is installed in '$(TARGET_INSTALL)'"
+	@which ssh-ec2 >/dev/null || echo "$(red)Add '$(TARGET_INSTALL)' at the begin of 'PATH' in your .bashrc ou .zshrc"
 
 install-with-ln: uninstall ## Installe dans /usr/local/bin, un lien vers le source de ssh-ec2
-	sudo ln -s $(shell pwd)/ssh-ec2 /usr/local/bin/ssh-ec2
+	@sudo ln -s $(shell pwd)/ssh-ec2 $(TARGET_INSTALL)/ssh-ec2
+	@echo "ssh-ec2 is installed in '$(TARGET_INSTALL)'."
+	@which ssh-ec2 >/dev/null || echo "$(red)Add '$(TARGET_INSTALL)' at the begin of 'PATH' in your .bashrc ou .zshrc"
 
 uninstall: ## Supprime de /usr/local/bin
-	sudo rm -f /usr/local/bin/ssh-ec2
+	@sudo rm -f $(TARGET_INSTALL)/ssh-ec2
 
 ## ---------------------------------------------------------------------------------------
 # Simulation d'un train qui prend du temps
