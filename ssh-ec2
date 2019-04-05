@@ -92,7 +92,7 @@ fi
 # ----------- Manage .env
 # Set only undefined variables. .env have lower priority
 # For debug, replace '.' by 'cat'
-. <( grep -v '^#' .env  | while read line; do
+[ -e .env ] && . <( grep -v '^#' .env  | while read line; do
     key=$(echo $line | cut -d '=' -f 1)
     if [[ ! -z "$key" && -z "${!key}" ]]; then
         echo $line | sed -E "s/=(.*)/='\1'/"
@@ -370,11 +370,10 @@ TAGS=(
 )
 
 if [ ! -z "${TRIGRAM}" ] ; then
-    TAGS+="Trigram::${TRIGRAM}"
+    TAGS+=("Trigram::${TRIGRAM}")
 fi
 
 _TAGS="["
-__tags=""
 for index in "${TAGS[@]}" ; do
     K="${index%%::*}"
     V="${index##*::}"

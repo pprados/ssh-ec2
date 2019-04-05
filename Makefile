@@ -46,6 +46,8 @@ else ifdef CUDA_PATH
 USE_GPU:=-gpu
 endif
 
+## ---------------------------------------------------------------------------------------
+# SNIPPET pour récupérer les séquences de caractères pour les couleurs
 # Manage colors...
 normal:=$(shell tput sgr0)
 red:=$(shell tput setaf 1)
@@ -216,10 +218,9 @@ VALIDATE_VENV=$(ACTIVATE_VENV)
 requirements: \
 		$(PIP_PACKAGE) \
 		.gitattributes \
-		$(CONDA_PACKAGE)/spacy/data/en \
 		nltk-database \
-		spacy-database \
-		$(shell jupyter --data-dir)/kernels/$(KERNEL)
+		spacy-database
+		
 
 # Règle de vérification de la bonne installation de la version de python dans l'environnement Conda
 $(CONDA_PYTHON):
@@ -339,7 +340,7 @@ build-%: requirements
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour executer jupyter notebook, mais en s'assurant de la bonne application des dépendances.
 # Utilisez 'make notebook' à la place de 'jupyter notebook'.
-notebook: requirements ## Start jupyter notebooks
+notebook: requirements $(shell jupyter --data-dir)/kernels/$(KERNEL) ## Start jupyter notebooks
 	$(VALIDATE_VENV)
 	jupyter notebook
 

@@ -57,7 +57,7 @@ bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sour
 L'utilisateur de `ssh-ec2` doit :
 - avoir un compte AWS
 - appartenir au group `SshEc2`
-- installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
+- installer le [CLI AWS](https://tinyurl.com/yd4ru2nu) ou pour [MacOs](https://docs.aws.amazon.com/fr_fr/cli/latest/userguide/install-macos.html)
 
     ```bash
     $ pip3 install awscli --upgrade --user
@@ -77,7 +77,7 @@ Default output format [None]: json
 - Valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent 
 
 ```bash
-$ echo export TRIGRAM=PPR >>~/.bashrc
+$ echo export TRIGRAM=_mon trigrame_ >>~/.bashrc
 $ . ~/.bashrc
 ```
 - Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
@@ -104,6 +104,13 @@ The key's randomart image is:
 |o+++.            |
 +----[SHA256]-----+
 ```
+- Ou bien, réutiliser votre clé existante `~/.ssh/rsa_id`. Pour cela
+vous devez propablement faire un
+```bash
+$ ln ~/.ssh/rsa_id ~/.ssh/$TRIGRAM
+$ ln ~/.ssh/rsa_id.pub ~/.ssh/$TRIGRAM.pub
+```
+
 - Récupérer la clé publique
 
 ```bash
@@ -114,12 +121,16 @@ EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7
 2WWetHjrc+SdkXyTFQ==
 ```
 - La copier dans le press-papier
-- Importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
+- Ouvrir la [console AWS](https://eu-central-1.signin.aws.amazon.com) et se logger avec l'email et le passwd
+- Dans le service *EC2*, menu *Réseau et sécurité* / *Pair de clés*, 
+importer la pair de clé SSH avec le nom du trigram dans les différentes régions.
 
 ![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/ImportKeyPair.png?raw=true "ImportKeyPair")
 
 - Normalement, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
 Sinon, consultez la document de [ssh-agent](https://www.ssh.com/ssh/agent)
+
+TODO: https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically
 
 A défaut de `TRIGRAM`, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environnement `AWS_KEY_NAME`.
@@ -348,6 +359,23 @@ pour installer le nécessaire avant le traitement.
 # Bonus
 De nombreuses recettes utils pour un Datascientist sont présente dans le 
 [Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
+
+# Faq
+## J'ai une erreur de connexion
+- Vérifiez que la variable TRIGRAM est bien valorisée
+```bash
+$ echo $TRIGRAM
+```
+
+## Je n'arrive toujours pas à me connecter
+- Essayez d'indiquer le fichier de clé lors du lancement
+```bash
+$ ssh-ec2 -i ~/.ssh/$TRIGRAM --leave
+```
+Si cela fonctionne, c'est une bonne nouvelle.
+Il faut juste ajouter la clé en mémoire pour qu'elle soit disponible.
+- Sous Linux, il n'y a rien à faire, ou executer un `ssh-add ~/.ssh/$TRIGRAM`
+- Sous Mac, voir [ici](https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically)
 
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.
