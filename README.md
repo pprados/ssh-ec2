@@ -54,6 +54,14 @@ bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sour
 - soit faire un copie dans `/usr/local/bin` (`make install`)
 
 ## Pré-requis sur AWS pour l'utilisateur
+Avant toute chose, pour un utilisateur sous MacOS, il faut metre à jour bash (même si vous utilisez zsh):
+```bash
+$ brew install bash
+$ sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells' then chsh -s /usr/local/bin/bash
+$ bash --version
+GNU bash, version 4+
+```
+
 L'utilisateur de `ssh-ec2` doit :
 - avoir un compte AWS
 - appartenir au group `SshEc2`
@@ -127,10 +135,19 @@ importer la pair de clé SSH avec le nom du trigram dans les différentes régio
 
 ![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/ImportKeyPair.png?raw=true "ImportKeyPair")
 
-- Normalement, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
-Sinon, consultez la document de [ssh-agent](https://www.ssh.com/ssh/agent)
+- Sous Linux, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
+- Mac, ajoutez ou modifier le fichier `~/.ssh/config` avec : 
 
-TODO: https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically
+
+```
+Host *
+  UseKeychain yes
+  AddKeysToAgent yes
+  IdentityFile ~/.ssh/PPR
+```
+N'oubliez pas de remplacer `PPR` par votre trigram. Vous pouvez ajouter d'autres `IdentityFile` si besoin.
+
+Lors de la première connexion, la passphrase de clé sera demandée ; plus par la suite ( [Référence](https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically) ).
 
 A défaut de `TRIGRAM`, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé 
 ou la valeur de la variable d'environnement `AWS_KEY_NAME`.
