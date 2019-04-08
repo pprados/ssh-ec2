@@ -92,13 +92,18 @@ fi
 # ----------- Manage .env
 # Set only undefined variables. .env have lower priority
 # For debug, replace '.' by 'cat'
-[ -e .env ] && . <( grep -v '^#' .env  | while read line; do
-    key=$(echo $line | cut -d '=' -f 1)
-    if [[ ! -z "$key" && -z "${!key}" ]]; then
-        echo $line | sed -E "s/=(.*)/='\1'/"
-    fi
-    done
-    )
+if [ -e .env ] ; then
+    temp_file=$(mktemp)
+    cat <( grep -v '^#' .env  | while read line; do
+        key=$(echo $line | cut -d '=' -f 1)
+        if [[ ! -z "$key" && -z "${!key}" ]]; then
+            echo $line | sed -E "s/=(.*)/='\1'/"
+        fi
+        done
+        ) >$temp_file
+    . $temp_file
+    rm $temp_file
+fi
 
 # ----------- Check presence of others tools
 if  [[ "$(which aws)" == ""  ]]; then

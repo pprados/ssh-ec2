@@ -54,14 +54,6 @@ bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sour
 - soit faire un copie dans `/usr/local/bin` (`make install`)
 
 ## Pré-requis sur AWS pour l'utilisateur
-Avant toute chose, pour un utilisateur sous MacOS, il faut metre à jour bash (même si vous utilisez zsh):
-```bash
-$ brew install bash
-$ sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells' then chsh -s /usr/local/bin/bash
-$ bash --version
-GNU bash, version 4+
-```
-
 L'utilisateur de `ssh-ec2` doit :
 - avoir un compte AWS
 - appartenir au group `SshEc2`
@@ -376,6 +368,15 @@ pour installer le nécessaire avant le traitement.
 # Bonus
 De nombreuses recettes utils pour un Datascientist sont présente dans le 
 [Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
+
+Pour avoir une version plus à jour de bash sur MacOS:
+```bash
+$ brew install bash
+$ sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells' then chsh -s /usr/local/bin/bash
+$ bash --version
+GNU bash, version 4+
+```
+
 
 # Faq
 ## J'ai une erreur de connexion
