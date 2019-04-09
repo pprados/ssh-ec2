@@ -397,6 +397,8 @@ AWS_FINAL_STATE=${AWS_FINAL_STATE=${_DEFAULT_FINAL_STATE}}
 AWS_USER_DATA=${AWS_USER_DATA=${_DEFAULT_USER_DATA}}
 AWS_DISABLE_HOST_CHECKING="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet"
 
+echo "AWS_USER_DATA=$AWS_USER_DATA"
+
 if [[ ! -z "${AWS_PEM}" ]]; then
 PEM_SSH="-i ${AWS_PEM}"
 fi
