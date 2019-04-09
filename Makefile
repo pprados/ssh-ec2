@@ -195,8 +195,8 @@ CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_
 ACTIVATE_VENV=source activate $(VENV)
 DEACTIVATE_VENV=source deactivate $(VENV)
 
-#VALIDATE_VENV=$(CHECK_VENV)
-VALIDATE_VENV=$(ACTIVATE_VENV)
+VALIDATE_VENV=$(CHECK_VENV)
+#VALIDATE_VENV=$(ACTIVATE_VENV)
 
 JUPYTER_DATA_DIR:=$(shell jupyter --data-dir 2>/dev/null || echo "~/.local/share/jupyter")
 #JUPYTER_DATA_DIR:=~/.local/share/jupyter
@@ -366,11 +366,8 @@ clean-pip: # Remove all the pip package
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour nettoyer complètement l'environnement Conda
-clean-venv clean-$(VENV):  ## Set the current VENV empty
-	@echo -e "$(cyan)Clean virtualenv $(VENV)...$(normal)"
-	$(DEACTIVATE_VENV)
-	conda env remove -y -n $(VENV) -q >/dev/null ; \
-	echo -e "$(cyan)Re-create virtualenv $(VENV)...$(normal)"
+clean-venv clean-$(VENV): remove-venv ## Set the current VENV empty
+	@echo -e "$(cyan)Re-create virtualenv $(VENV)...$(normal)"
 	conda create -y -q -n $(VENV)
 	touch setup.py
 	echo -e "$(yellow)Warning: Conda virtualenv $(VENV) is empty.$(normal)"
@@ -381,7 +378,7 @@ clean: clean-pyc clean-notebooks ## Clean current environment
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour faire le ménage du projet (hors environnement)
-clean-all: clean clean-venv remove-kernel ## Clean all environments
+clean-all: clean remove-venv remove-kernel ## Clean all environments
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour déclencher les tests unitaires

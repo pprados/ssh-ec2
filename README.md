@@ -420,20 +420,8 @@ pour installer le nécessaire avant le traitement.
 Inspirez vous du [Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
 d'exemple fourni avec le projet.
 
-# Bonus
-De nombreuses recettes utiles pour un Datascientist sont présente dans le 
-[Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
-
-Pour avoir une version plus à jour de bash sur MacOS:
-```bash
-$ brew install bash
-$ sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells' then chsh -s /usr/local/bin/bash
-$ bash --version
-GNU bash, version 4+
-```
-
-
 # Faq
+
 ## J'ai une erreur de connexion ou de privilège
 - Vérifiez que la variable TRIGRAM est bien valorisée
 - Vérifiez dans la [console AWS](https://eu-central-1.signin.aws.amazon.com) que votre clé est bien installée 
@@ -455,6 +443,41 @@ Il faut juste ajouter la clé en mémoire pour qu'elle soit disponible.
 - Sous Linux, il n'y a rien à faire ou executez un `ssh-add ~/.ssh/$TRIGRAM`
 - Sous Mac, voir [ici](https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically)
 ou executez un `ssh-add ~/.ssh/$TRIGRAM`
+
+# Bonus
+
+## Recettes Makefile
+De nombreuses recettes utiles pour un Datascientist sont présente dans le 
+[Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
+
+Par exemple, pour initialiser l'environnement de développement
+```bash
+$ ./configure
+$ conda activate ssh-ec2
+```
+
+Puis, pour lancer les TU
+```bash
+$ make test # Install all dependencies
+```
+
+Pour nettoyer tous l'environnement (suppression du VENV, du kernel, etc)
+```bash
+$ make clean-all
+```
+Pour en savoir plus
+```bash
+$ make help
+```
+
+## Mise à jour de `bash`
+Pour avoir une version plus à jour de bash sur MacOS:
+```bash
+$ brew install bash
+$ sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells' then chsh -s /usr/local/bin/bash
+$ bash --version
+GNU bash, version 4+
+```
 
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.

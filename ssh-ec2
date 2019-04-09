@@ -463,7 +463,7 @@ function finish() {
                     echo -e "${yellow}and security group... ${normal}\c"
                     aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_NAME_INSTANCE}
                  fi
-                echo -e "${red}done${normal}"
+                echo -e "${yellow}done${normal}"
                 ;;
             *)
                 if [[ $nb_of_instance > 1 ]] ; then
