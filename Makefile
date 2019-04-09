@@ -419,7 +419,7 @@ EC2_LIFE_CYCLE=--leave
 # Recette permettant un 'make ec2-test'
 ec2-%: ## call make recipe on EC2
 	$(VALIDATE_VENV)
-	ssh-ec2 --verbose $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
+	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
 
 # Recette permettant d'exécuter une recette avec un tmux activé.
 # Par exemple `make ec2-tmux-train`
