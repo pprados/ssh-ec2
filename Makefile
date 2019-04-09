@@ -189,7 +189,7 @@ endif
 # - CHECK_VENV pour vérifier l'activation d'un VENV avant de commencer
 # - VALIDATE_VENV pour forcer l'activation d'un VENV si besoin
 
-CHECK_VENV=if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
+CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
   then ( echo -e "$(green)Use: $(cyan)conda activate $(VENV)$(green) before using 'make'$(normal)"; exit 1 ) ; fi
 
 ACTIVATE_VENV=source activate $(VENV)
@@ -350,8 +350,8 @@ notebook: requirements $(JUPYTER_DATA_DIR)/kernels/$(KERNEL) ## Start jupyter no
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour nettoyer tous les fichiers générés par le compilateur Python.
 clean-pyc: # Clean pre-compiled files
-	-/usr/bin/find . -name '*.pyc' -exec rm --force {} +
-	-/usr/bin/find . -name '*.pyo' -exec rm --force {} +
+	-/usr/bin/find . -name '*.pyc' -exec rm -f {} +
+	-/usr/bin/find . -name '*.pyo' -exec rm -f {} +
 
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour nettoyer tous les notebooks
@@ -413,12 +413,13 @@ sudo su - ec2-user -c "conda install -n $(VENV_AWS) make>=4 -y"
 endef
 
 # Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
+#EC2_LIFE_CYCLE=--terminate
 EC2_LIFE_CYCLE=--leave
 
 # Recette permettant un 'make ec2-test'
 ec2-%: ## call make recipe on EC2
 	$(VALIDATE_VENV)
-	DEBUG=y ssh-ec2 --verbose $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
+	ssh-ec2 --verbose $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
 
 # Recette permettant d'exécuter une recette avec un tmux activé.
 # Par exemple `make ec2-tmux-train`
