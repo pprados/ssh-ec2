@@ -581,7 +581,7 @@ AWS_HOST=${AWS_INSTANCE_USER}@$(aws --region ${AWS_REGION} ec2 describe-instance
 
 if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
-    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
+    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE="-v"
     # TODO: use file and add with --exclude-from ???
     echo $EXCLUDE | xargs rsync -vz -r \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
@@ -657,7 +657,7 @@ fi
 [[ "${DEBUG}" == y ]] && echo "nb_of_instance=$nb_of_instance"
 if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
-    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
+    [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE="-v"
     echo $EXCLUDE | xargs rsync -vza -r \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
