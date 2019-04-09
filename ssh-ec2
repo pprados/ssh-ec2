@@ -387,7 +387,7 @@ for index in "${TAGS[@]}" ; do
     K="${index%%::*}"
     V="${index##*::}"
     _TAGS+="{Key=${K},Value=${V}},"
-    __tags+="${K}=${V}, "
+    [ "${K}" != "Name" ] && __tags+="${K}=${V}, "
 done
 _TAGS=${_TAGS%*,}"]"
 __tags=${__tags%*, }
@@ -396,8 +396,6 @@ AWS_TAGS="ResourceType=instance,Tags=$_TAGS"
 AWS_FINAL_STATE=${AWS_FINAL_STATE=${_DEFAULT_FINAL_STATE}}
 AWS_USER_DATA=${AWS_USER_DATA=${_DEFAULT_USER_DATA}}
 AWS_DISABLE_HOST_CHECKING="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet"
-
-echo "AWS_USER_DATA=$AWS_USER_DATA"
 
 if [[ ! -z "${AWS_PEM}" ]]; then
 PEM_SSH="-i ${AWS_PEM}"
@@ -585,7 +583,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
     # TODO: use file and add with --exclude-from ???
-    echo $EXCLUDE | xargs rsync -vzr \
+    echo $EXCLUDE | xargs rsync -vz -r \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
       --archive \
@@ -660,7 +658,7 @@ fi
 if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
-    echo $EXCLUDE | xargs rsync -vzar \
+    echo $EXCLUDE | xargs rsync -vza -r \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
       ${RSYNC_QUIET} \
