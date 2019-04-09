@@ -89,6 +89,7 @@ if test -t 1; then
     fi
 fi
 
+
 # ----------- Manage .env
 # Set only undefined variables. .env have lower priority
 # For debug, replace '.' by 'cat'
@@ -126,6 +127,14 @@ _DEFAULT_IAM_INSTANCE_PROFILE="EC2ReadOnlyAccessToS3"
 _DEFAULT_RSYNC_QUIET=--quiet
 _DEFAULT_USER_DATA="sudo locale-gen $(locale | grep LANG= | cut -d '=' -f 2);"
 _DEFAULT_SECURITY_GROUP=SshEC2
+
+# ----------- Manage .ssh/config
+if [[ -e ~/.aws/config ]] ;  then
+    default_user_region=$(cat ~/.aws/config | grep -v '^#' | grep region | cut -d '=' -f 2)
+    if [[ ! -z ${default_user_region} ]] ; then
+        _DEFAULT_REGION=${default_user_region}
+    fi
+fi
 
 declare -a TAGS # The user can set somme additional tags with syntax 'key::value'
 RSYNC_QUIET=${_DEFAULT_RSYNC_QUIET}
@@ -321,12 +330,7 @@ if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
 else
     AWS_IAM_INSTANCE_PROFILE=""
 fi
-if [[ -e ~/.aws/config ]] ;  then
-    default_region=$(cat ~/.aws/config | grep region | cut -d '=' -f 2)
-else
-    default_region=${_DEFAULT_REGION}
-fi
-AWS_REGION=$(echo ${AWS_DEFAULT_REGION=${default_region}} | tr -d '[:space:]')
+AWS_REGION=${AWS_REGION=${AWS_DEFAULT_REGION}}
 
 AWS_IMAGE_NAME=${AWS_IMAGE_NAME=${_DEFAULT_IMAGE_NAME}}
 AWS_LAST_KNOW_IMAGE_ID=$(aws --region ${AWS_REGION} ec2 describe-images \
@@ -579,7 +583,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=""
     # TODO: use file and add with --exclude-from ???
-    echo $EXCLUDE | xargs rsync -vz \
+    echo $EXCLUDE | xargs rsync -vzr \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
       --archive \
@@ -654,7 +658,7 @@ fi
 if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE=
-    echo $EXCLUDE | xargs rsync -vza \
+    echo $EXCLUDE | xargs rsync -vzar \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
       ${RSYNC_QUIET} \

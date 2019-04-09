@@ -78,7 +78,7 @@ PYTHON_VERSION:=3.6
 # Cela servira à gérer automatiquement les environnements.
 # Pour que cela fonctionne, il faut avoir un environement Conda actif,
 # identifié par la variable CONDA_PREFIX.
-CONDA_BASE=$(conda info --base)
+CONDA_BASE=$(shell conda info --base)
 CONDA_PACKAGE:=$(CONDA_PREFIX)/lib/python$(PYTHON_VERSION)/site-packages
 CONDA_PYTHON:=$(CONDA_PREFIX)/bin/python
 PIP_PACKAGE:=$(CONDA_PACKAGE)/$(PRJ_PACKAGE).egg-link
@@ -198,6 +198,9 @@ DEACTIVATE_VENV=source deactivate $(VENV)
 #VALIDATE_VENV=$(CHECK_VENV)
 VALIDATE_VENV=$(ACTIVATE_VENV)
 
+JUPYTER_DATA_DIR:=$(shell jupyter --data-dir 2>/dev/null || echo "~/.local/share/jupyter")
+#JUPYTER_DATA_DIR:=~/.local/share/jupyter
+
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour gérer correctement toute les dépendances python du projet.
 # La cible `requirements` se charge de gérer toutes les dépendances
@@ -235,7 +238,7 @@ $(PIP_PACKAGE): $(CONDA_PYTHON) setup.py | .git # Install pip dependencies
 	@touch $(PIP_PACKAGE)
 
 # Règle d'installation du Kernel pour Jupyter
-$(shell jupyter --data-dir)/kernels/$(KERNEL): $(PIP_PACKAGE)
+$(JUPYTER_DATA_DIR)/kernels/$(KERNEL): $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
 	python -m ipykernel install --user --name $(KERNEL)
 
@@ -340,7 +343,7 @@ build-%: requirements
 ## ---------------------------------------------------------------------------------------
 # SNIPPET pour executer jupyter notebook, mais en s'assurant de la bonne application des dépendances.
 # Utilisez 'make notebook' à la place de 'jupyter notebook'.
-notebook: requirements $(shell jupyter --data-dir)/kernels/$(KERNEL) ## Start jupyter notebooks
+notebook: requirements $(JUPYTER_DATA_DIR)/kernels/$(KERNEL) ## Start jupyter notebooks
 	$(VALIDATE_VENV)
 	jupyter notebook
 
