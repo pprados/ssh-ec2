@@ -6,7 +6,7 @@ Un utilitaire pour augmenter la puissance de sa machine, grâce à AWS.
 calculs complexes avec des instances puissantes, équipées de GPU ou de beaucoups de mémoire. L'outil se charge de :
 - créer et lancer une instance éphémère EC2
 - répliquer le répertoire courant sur l'instance
-- lancer un SSH dans le répertoire
+- lancer un SSH dans la copie du répertoire
     - soit avec un `bash`
     - soit pour déclencher un traitement
 - de récupérer tous les résultats
@@ -56,7 +56,7 @@ Si ce n'est pas le cas, mettez la version à jour.
 brew install make
 ```
 
-Puis installer:
+Puis installez:
 - soit un lien symbolique vers le source (`make install-with-ln`) pour
 bénéficier des mises à jours du repo (mais il ne faut plus supprimer les sources)
 - soit faire un copie dans `/usr/local/bin` (`make install`)
@@ -81,7 +81,7 @@ Vous devez avoir reçu un fichier de la DSI avec:
 [ $OSTYPE == 'linux-gnu' ] && RC=~/.bashrc
 [ $OSTYPE == darwin* ] && RC=~/.bash_profile
 [ -e ~/.zshrc ] && RC=~/.zshrc
-echo export TRIGRAM='_mon trigrame_' >>${RC}_X
+echo export TRIGRAM='_mon trigrame_' >>${RC}_X # /!\ _mon trigrame_ est a ajuster !
 source ${RC}   # Important pour la suite.
 echo $TRIGRAM # La variable doit être valorisée
 ```
@@ -92,6 +92,7 @@ $ aws --version
 ```
 
 - [configurer aws](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
+avec les clés d'API fourni par la DSI
 ```bash
 $ aws configure
 AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
@@ -102,8 +103,9 @@ Default output format [None]: json
 Ces clés d'API permettront d'utiliser `aws cli` dans `ssh-ec2`
 
 - Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
-Elle servira à se connecter aux instances EC2 créées.
-A ne pas confondre avec l'authentification à la console AWS ou avec les clés d'Api.
+Elle servira à se connecter aux instances EC2 créées. Elle doit absolument être installé dans les différentes
+régions d'AWS pour permettre la connexion aux instances.
+Attention, ne pas confondre la pair de clé SSH avec l'authentification à la console AWS ou avec les clés d'Api.
 
 ```
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 2048
@@ -153,6 +155,7 @@ que vous souhaitez utiliser (Probablement toute l'europe, à sélectionner en ha
 
 - Sous Linux, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
 - Sous Mac, ajoutez ou modifiez le fichier `~/.ssh/config` ainsi :
+
 ```bash
 echo >>~/.ssh/config '
 Host *
@@ -166,7 +169,7 @@ Vous pouvez ajouter d'autres `IdentityFile` si besoin.
 Lors de la première connexion, la passphrase de clé privée sera demandée ;
 plus par la suite ( [Référence](https://apple.stackexchange.com/questions/48502/how-can-i-permanently-add-my-ssh-private-key-to-keychain-so-it-is-automatically) ).
 
-A défaut de `TRIGRAM`, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé
+À défaut de `TRIGRAM`, c'est le nom de l'utilisateur Linux (`$USER`) qui est utilisé comme clé
 ou la valeur de la variable d'environnement `AWS_KEY_NAME`.
 
 Si vous avez des erreurs étrange en utilisant `ssh-ec2`, regardez la FAQ.
@@ -195,6 +198,7 @@ Par exemple:
     - Un groupe `SshEc2` avec la stratégie/policy `SshEc2Access`,
 
 ![CreateNewGroup](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/CreateNewGroup.png)
+
     - puis y associer les utilisateurs habilités à utiliser l'outil.
 
 ![AssociateGroups](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/AssociateGroups.png)
@@ -208,8 +212,10 @@ Par exemple:
 Le programme est paramétrable via la ligne de commande ou à l'aide de variables d'environements.
 
 Une fois installé correctement dans l'OS (voir plus haut), la commande est disponible dans tous les répertoires.
-Dans n'importe quel répertoire de projet, vous pouvez l'invoquer sans autre modification.
-Par la suite, vous pouvez créer un fichier `.env` avec les paramètres spécifiques et/ou
+Depuis un répertoire racine de projet, vous pouvez l'invoquer sans autre modification.
+
+Par la suite, vous pouvez créer un fichier `.env` (voir plus loin)
+avec les paramètres spécifiques (région, type d'instance, etc.) et/ou
 un fichier `.rsyncignore` pour indiquer les répertoires à ne pas dupliquer sur l'instance EC2
 lors de l'invocation de l'outil (pour des raisons d'optimisations uniquement).
 
@@ -229,6 +235,7 @@ par défaut (fichier `~/.aws/config`) en lieu et place de `eu-central-1`.
 Notez que pour ajouter un script d'initialisation de la VM, exécuté lors de sa création, il faut :
 - soit utiliser un fichier (`file://....sh`)
 - soit utiliser un script complet **AVEC** shebang
+
 ```bash
 $ export AWS_USER_DATA='#!/usr/bin/env bash
 source activate $(VENV_AWS)
