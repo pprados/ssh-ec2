@@ -77,7 +77,6 @@ Vous devez avoir reçu un fichier de la DSI avec:
 
 - appartenir au group `SshEc2` (à demander à la DSI)
 - valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent
-
 ```bash
 [ $OSTYPE == 'linux-gnu' ] && RC=~/.bashrc
 [ $OSTYPE == darwin* ] && RC=~/.bash_profile
@@ -87,11 +86,10 @@ source ${RC}   # Important pour la suite.
 echo $TRIGRAM # La variable doit être valorisée
 ```
 - installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
-
-    ```bash
-    $ pip3 install awscli --upgrade --user
-    $ aws --version
-    ```
+```bash
+$ pip3 install awscli --upgrade --user
+$ aws --version
+```
 
 - [configurer aws](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
 ```bash
@@ -107,7 +105,7 @@ Ces clés d'API permettront d'utiliser `aws cli` dans `ssh-ec2`
 Elle servira à se connecter aux instances EC2 créées.
 A ne pas confondre avec l'authentification à la console AWS ou avec les clés d'Api.
 
-```bash
+```
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 2048
 Generating public/private ecdsa key pair.
 Enter passphrase (empty for no passphrase):
@@ -137,7 +135,6 @@ $ ln ~/.ssh/rsa_id.pub ~/.ssh/$TRIGRAM.pub
 ```
 
 - Récupérer la clé publique
-
 ```bash
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -y
 Enter passphrase:
@@ -156,7 +153,7 @@ que vous souhaitez utiliser (Probablement toute l'europe, à sélectionner en ha
 
 - Sous Linux, toutes les clés dans `~/.ssh` sont automatiquement disponibles avec les sessions X/Gnome.
 - Sous Mac, ajoutez ou modifiez le fichier `~/.ssh/config` ainsi :
-```
+```bash
 echo >>~/.ssh/config '
 Host *
   UseKeychain yes
@@ -232,7 +229,6 @@ par défaut (fichier `~/.aws/config`) en lieu et place de `eu-central-1`.
 Notez que pour ajouter un script d'initialisation de la VM, exécuté lors de sa création, il faut :
 - soit utiliser un fichier (`file://....sh`)
 - soit utiliser un script complet **AVEC** shebang
-
 ```bash
 $ export AWS_USER_DATA='#!/usr/bin/env bash
 source activate $(VENV_AWS)
@@ -240,9 +236,7 @@ conda install 'make>=4' -y'
 
 $ echo -e "$AWS_USER_DATA"
 ```
-
 Vous pouvez modifier les valeurs par défaut en déclarant des variables d'environnements
-
 ```bash
 export AWS_INSTANCE_TYPE=p2.xlarge
 export AWS_IMAGE_NAME="Deep Learning AMI (Amazon Linux)*"
@@ -251,7 +245,6 @@ export AWS_REGION=eu-west-1
 Ces variables sont prioritaires aux autres paramètres.
 
 Vous pouvez également valoriser ces variables dans un fichier `.env`
-
 ```bash
 # File .env
 AWS_INSTANCE_TYPE=t2.small
@@ -268,7 +261,6 @@ permet de forcer une autre région.
 Plus d'informations sont présentes dans le source de `ssh-ec2`.
 
 Pour avoir un rapide rappel des paramètres de la ligne de commande `--help` :
-
 ```bash
 $ ssh-ec2 --help
 ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \
@@ -282,7 +274,6 @@ sur une instance EC2 qui sera détruite à la sortie du terminal.
 
 #### Utilisation synchrone
 Les paramètres sont interprétés comme une commande à exécuter (comme avec un `ssh` classique).
-
 ```bash
 ssh-ec2 who am i # Invoke 'who am i' on EC2
 
@@ -307,7 +298,6 @@ il faut utiliser
 - `--leave` (ou `-l`) pour laisser instance vivante
 - `--stop` (ou `-s`) pour la sauvegarder et l'arréter
 - ou `--terminate` (ou `-t` - par défaut) pour la supprimer.
-
 ```bash
 ssh-ec2 --stop "source activate cntk_p36 ; VENV=cntk_p36 make train" # Sauve et arrète l'instance après le traitement
 ```
