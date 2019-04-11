@@ -463,3 +463,37 @@ uninstall: ## Supprime de /usr/local/bin
 # Simulation d'un train qui prend du temps
 train: requirements ## Train the model
 	for i in $$(seq 1 120); do echo thinking; sleep 1 ; done
+
+
+## ---------------------------------------------------------------------------------------
+# SNIPPET pour convertir tous les notebooks du repertoire 'notebooks' en script
+# python dans le répertoire 'scripts', déjà compatible avec le mode scientifique de PyCharm Pro
+nbconvert:  ## Convert all notebooks to python scripts
+	@echo -e "Convert all notebooks..."
+	notebook_path=notebooks
+	script_path=scripts
+	tmpfile=$$(mktemp /tmp/make-XXXXX)
+	cat >$${tmpfile} <<TEMPLATE
+	{% extends 'python.tpl'%}
+	{% block in_prompt %}# %%{% endblock in_prompt %}
+	{%- block header -%}
+	#!/usr/bin/env python XXXX
+	# coding: utf-8
+	{% endblock header %}
+	{% block input %}
+	{{ cell.source | ipython2python }}{% endblock input %}
+	{% block markdowncell scoped %}
+	# %% md
+	'''
+	{{ cell.source  }}
+	'''
+	{% endblock markdowncell %}
+	TEMPLATE
+
+	while IFS= read -r -d '' filename; do
+		target=$$(echo $$filename | sed "s/^$${notebook_path}/$${script_path}/g; s/ipynb$$/py/g" )
+		mkdir -p $$(dirname $${target})
+		jupyter nbconvert --to python --template=$${tmpfile} --stdout "$${filename}" >"$${target}"
+		@echo -e "Convert $${filename} to $${target}"
+	done < <(find notebooks -name '*.ipynb' -type f -not -path '*/\.*' -prune -print0)
+	echo -e "$(cyan)All new scripts are in $${target}$(normal)"
