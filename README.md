@@ -157,12 +157,12 @@ que vous souhaitez utiliser (Probablement toute l'europe, à sélectionner en ha
 - Sous Mac, ajoutez ou modifiez le fichier `~/.ssh/config` ainsi :
 
 ```bash
-echo >>~/.ssh/config '
+echo >>~/.ssh/config "
 Host *
   UseKeychain yes
   AddKeysToAgent yes
   IdentityFile ~/.ssh/$TRIGRAM
-'  
+"  
 ```
 Vous pouvez ajouter d'autres `IdentityFile` si besoin.
 
