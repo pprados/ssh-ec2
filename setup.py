@@ -25,14 +25,14 @@ setup(
     },
     install_requires=                   # Exemples de packages nécessaires au run
     [
-        'tensorflow' + USE_GPU + '~=0.5',
-        'jupyter~=1.0',
+        'tensorflow' + USE_GPU + '~=0.5', # Exemple avec une alternative GPU
+        'jupyter~=1.0',                 # Ouvre les add-on Jupyter
         'numpy~=1.14',
         'pandas~=0.22',
         'plotly~=2.7',
         'scikit-learn~=0.19',
-        'spacy~=2.0',
-        'nltk~=3.3',
+        'spacy~=2.0',                   # Exemple de Spacy avec téléchargement de datas
+        'nltk~=3.3',                    # Exemple de NLTK avec téléchargement de datas
     ],
     #test_suite="tests",
 )

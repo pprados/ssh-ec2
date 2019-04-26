@@ -56,8 +56,8 @@ set -e # Detect all errors
 shopt -s extglob
 
 # Defautl security group
-AWS_SECURITY_GROUP=SshEC2
-CREATE_SECURITY_GROUP=no
+#AWS_SECURITY_GROUP=SshEC2
+#CREATE_SECURITY_GROUP=no
 
 # ----------- For debug
 if [[ "${DEBUG}" == y ]]; then
@@ -185,7 +185,7 @@ function arg_R() {
 }
 
 function arg_i() {
-    PEM_SSH=-i $1
+    PEM_SSH="-i $1"
 }
 
 function arg_no_rsync() {
@@ -316,7 +316,7 @@ if [[ -z "${AWS_NAME_INSTANCE}" ]] ; then
   AWS_NAME_INSTANCE=${AWS_KEY_NAME}-${CWBD}
 fi
 if [[ -z "${AWS_SECURITY_GROUP}" ]] ; then
-  AWS_SECURITY_GROUP=${AWS_NAME_INSTANCE}
+  AWS_SECURITY_GROUP=ssh-ec2-${AWS_NAME_INSTANCE}
 fi
 
 
@@ -330,12 +330,17 @@ if [[ ! -z "${AWS_IAM_INSTANCE_PROFILE}" ]] ; then
 else
     AWS_IAM_INSTANCE_PROFILE=""
 fi
-AWS_REGION=${AWS_REGION=${AWS_DEFAULT_REGION}}
+AWS_REGION=${AWS_REGION=${_DEFAULT_REGION}}
 
 AWS_IMAGE_NAME=${AWS_IMAGE_NAME=${_DEFAULT_IMAGE_NAME}}
 AWS_LAST_KNOW_IMAGE_ID=$(aws --region ${AWS_REGION} ec2 describe-images \
   --filters "Name=name,Values=${AWS_IMAGE_NAME}"  \
   --output json | jq -r '.Images | sort_by(.CreationDate) | last(.[]).ImageId')
+if [[ "${AWS_LAST_KNOW_IMAGE_ID}" == null ]] ; then
+    echo "${red}ERROR${normal}: Impossible to find the '${AWS_IMAGE_NAME}' AMI" >&2
+    exit 1
+fi
+
 AWS_IMAGE_ID=${AWS_IMAGE_ID=${AWS_LAST_KNOW_IMAGE_ID}}
 check=${AWS_IMAGE_ID?Image not found in the region ${AWS_REGION}}
 
@@ -459,9 +464,9 @@ function finish() {
                   test "$STATE" != "terminated"; do
                   sleep 3;
                 done;
-                if [[ "$CREATE_SECURITY_GROUP" == "yes" ]] ; then
+                if [[ "$CREATE_SECURITY_GROUP" != "no" ]] ; then
                     echo -e "${yellow}and security group... ${normal}\c"
-                    aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_NAME_INSTANCE}
+                    aws --region ${AWS_REGION} ec2 delete-security-group --group-name ${AWS_SECURITY_GROUP}
                  fi
                 echo -e "${yellow}done${normal}"
                 ;;
@@ -491,7 +496,7 @@ AWS_INSTANCE_ID=$(aws --region ${AWS_REGION} ec2 describe-instances \
 if [[ -z "$AWS_INSTANCE_ID" ]]; then
     echo ""
     # Create instance
-    if [[ "$CREATE_SECURITY_GROUP" == "yes" ]] ; then
+    if [[ "$CREATE_SECURITY_GROUP" != "no" ]] ; then
         AWS_SECURITY_GROUP_ID=$(aws ec2 \
         describe-security-groups \
           --region ${AWS_REGION} \
@@ -504,7 +509,7 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
             create-security-group \
               --region ${AWS_REGION} \
               --group-name ${AWS_SECURITY_GROUP} \
-              --description "Security group for ${AWS_NAME_INSTANCE}" \
+              --description "SSH-EC2: Security group for ${AWS_NAME_INSTANCE}" \
               ${AWS_DRY} \
               --output text 2>/dev/null)
             echo -e "with port 22 open... \c"
@@ -518,7 +523,6 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
             echo -e "done"
         fi
     fi
-
     echo -e "Creating new AWS EC2 instance... \c"
     case "${AWS_FINAL_STATE}" in
         leave|terminate)

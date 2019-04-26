@@ -70,25 +70,34 @@ $ ssh-ec2 # Create EC2 instance, duplicate directory, start ssh, synchronize res
 ## Pré-requis sur AWS pour l'utilisateur
 L'utilisateur de `ssh-ec2` doit :
 - avoir un compte AWS pour un accès à la [console Web](https://console.aws.amazon.com/console/home)
-via un user (format email octo) et un mot de passe.
+via un user (format email Octo) et un mot de passe.
 Vous devez avoir reçu un fichier de la DSI avec:
     - Un couple user/password
-    - Un couple API token
+    - Un couple API tokens
 
 - appartenir au group `SshEc2` (à demander à la DSI)
 - valoriser une variable `TRIGRAM` dans son `.bashrc` ou équivalent
+
 ```bash
+# Etape 1: A copier, ajuster et executer dans un shell
+export TRIGRAM=_mon trigrame_' # /!\ _mon trigrame_ est a ajuster !
+# Etape 2: A copier et executer dans un shell
 [ $OSTYPE == 'linux-gnu' ] && RC=~/.bashrc
 [ $OSTYPE == darwin* ] && RC=~/.bash_profile
 [ -e ~/.zshrc ] && RC=~/.zshrc
-echo export TRIGRAM='_mon trigrame_' >>${RC}_X # /!\ _mon trigrame_ est a ajuster !
+echo export TRIGRAM=$TRIGRAM >>${RC}_X 
 source ${RC}   # Important pour la suite.
-echo $TRIGRAM # La variable doit être valorisée
 ```
 - installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
 ```bash
 $ pip3 install awscli --upgrade --user
 $ aws --version
+```
+- vérifiez d'avoir ~/.config/bin dans le PATH (voir `.bashrc` ou `.zshrc` ou `.bash_profile`)
+pour pouvoir executer `aws`
+
+```bash
+export PATH=~/.config/bin:$PATH
 ```
 
 - [configurer aws](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
@@ -128,12 +137,6 @@ The key's randomart image is:
 | .E +            |
 |o+++.            |
 +----[SHA256]-----+
-```
-- Ou bien, réutiliser votre clé existante `~/.ssh/rsa_id`. Pour cela
-vous devez propablement faire un
-```bash
-$ ln ~/.ssh/rsa_id ~/.ssh/$TRIGRAM
-$ ln ~/.ssh/rsa_id.pub ~/.ssh/$TRIGRAM.pub
 ```
 
 - Récupérer la clé publique
@@ -423,15 +426,17 @@ d'exemple fourni avec le projet.
 # Faq
 
 ## J'ai une erreur de connexion ou de privilège
-- Vérifiez que la variable TRIGRAM est bien valorisée
-- Vérifiez dans la [console AWS](https://eu-central-1.signin.aws.amazon.com) que votre clé est bien installée
-dans la région utilisé.
 
 Assurez-vous :
 - d'avoir le Trigram valorisé (`echo $TRIGRAM`)
 - d'avoir bien utilisé le bon 'tenant' (le compte [AWS](https://eu-central-1.signin.aws.amazon.com)),
 - d'avoir pour chaque [région]((https://eu-central-1.signin.aws.amazon.com)) une clé identifié par votre trigram
-- et vérifiez tous les paramètres dans le bandeau de lancement
+
+Avec la console AWS, créez une instance, puis connectez vous avec
+```bash
+ssh -i ~/.ssh/$TRIGRAM ubuntu@<adresse ip de l'instance>
+```
+Tant que cela ne fonctionne pas, il n'est pas nécessaire d'aller plus loin.
 
 ## Je n'arrive toujours pas à me connecter
 - Essayez d'indiquer le fichier de clé lors du lancement
@@ -445,30 +450,6 @@ Il faut juste ajouter la clé en mémoire pour qu'elle soit disponible.
 ou executez un `ssh-add ~/.ssh/$TRIGRAM`
 
 # Bonus
-
-## Recettes Makefile
-De nombreuses recettes utiles pour un Datascientist sont présente dans le
-[Makefile](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/Makefile?raw=true)
-
-Par exemple, pour initialiser l'environnement de développement
-```bash
-$ ./configure
-$ conda activate ssh-ec2
-```
-
-Puis, pour lancer les TU
-```bash
-$ make test # Install all dependencies
-```
-
-Pour nettoyer tous l'environnement (suppression du VENV, du kernel, etc)
-```bash
-$ make clean-all
-```
-Pour en savoir plus
-```bash
-$ make help
-```
 
 ## Mise à jour de `bash`
 Pour avoir une version plus à jour de bash sur MacOS:
