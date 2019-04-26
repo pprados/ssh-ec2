@@ -463,3 +463,6 @@ GNU bash, version 4+
 # Contribution
 Toutes les contributions et suggestion sont les bienvenues.
 Contactez moi (ppr@octo.com) ou soumettez un pull-request (doc comprise).
+
+
+PPR TODO: tester AWS_USER_DATA=pip install -e .

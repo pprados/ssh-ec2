@@ -56,8 +56,8 @@ set -e # Detect all errors
 shopt -s extglob
 
 # Defautl security group
-#AWS_SECURITY_GROUP=SshEC2
-#CREATE_SECURITY_GROUP=no
+[[ -z "${CREATE_SECURITY_GROUP}" ]] && CREATE_SECURITY_GROUP=no
+[[ -z "${AWS_SECURITY_GROUP}" ]] && AWS_SECURITY_GROUP=SshEC2
 
 # ----------- For debug
 if [[ "${DEBUG}" == y ]]; then
@@ -480,9 +480,12 @@ function finish() {
                 ;;
         esac
     fi
-    if [ ! "$1" == "EXIT" ] ; then
+    if [  "$1" != "EXIT" ] ; then
         exit -1 ;
+    else
+        exit 0
     fi
+
 }
 
 trap_with_arg finish EXIT
@@ -540,6 +543,7 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
         echo "${AWS_USER_DATA}" >$tmpfile
         USER_DATA="file://$tmpfile"
     fi
+    [[ "${DEBUG}" == y ]] && set -x
     AWS_INSTANCE_ID=$(aws \
       ec2 run-instances \
       --region ${AWS_REGION} \
@@ -552,13 +556,16 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
       --instance-initiated-shutdown-behavior ${shutdown_mode} \
       --user-data ${USER_DATA} \
       --output text --query 'Instances[*].InstanceId')
+    if [[ -z "${AWS_INSTANCE_ID}" ]] ; then
+        echo -e "${red}ERROR${normal}: Impossible to create instance" >&2
+        exit 1
+    fi
     echo -e "starting... \c"
     aws --region ${AWS_REGION} ec2 wait instance-status-ok --instance-ids ${AWS_INSTANCE_ID}
     echo -e "done"
     [ -e "$tmpfile" ] && rm "$tmpfile"
 fi
 STATE=$(aws --region ${AWS_REGION} ec2 describe-instances --instance-ids $AWS_INSTANCE_ID --output text --query 'Reservations[*].Instances[*].State.Name')
-set +x
 if [ "$STATE" == "stopping" -o "$STATE" == "stopped" ]; then
     echo ""
     echo -e "Start instance... \c"
@@ -673,4 +680,4 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
 else
     echo -e "${yellow}Warning: No rsync${normal}"
 fi
-exit 0
+

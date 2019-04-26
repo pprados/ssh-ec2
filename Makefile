@@ -1,20 +1,12 @@
 #!/usr/bin/env make
+
+# Ce Makefile possède une démo d'utilisation de ssh-ec2 avec un projet Python de ML.
+#
+
 SHELL=/bin/bash
 .SHELLFLAGS = -e -c
 .ONESHELL:
 
-
-## ---------------------------------------------------------------------------------------
-# SNIPPET pour détecter l'OS d'exécution.
-ifeq ($(OS),Windows_NT)
-    OS := Windows
-else
-    OS := $(shell sh -c 'uname 2>/dev/null || echo Unknown')
-endif
-
-## ---------------------------------------------------------------------------------------
-# SNIPPET pour détecter la présence d'un GPU afin de modifier le nom du projet
-# et ses dépendances si nécessaire.
 ifdef GPU
 USE_GPU:=$(shell [[ "$$GPU" == yes ]] && echo "-gpu")
 else ifneq ("$(wildcard /proc/driver/nvidia)","")
@@ -46,31 +38,49 @@ CONDA_PACKAGE:=$(CONDA_PREFIX)/lib/python$(PYTHON_VERSION)/site-packages
 CONDA_PYTHON:=$(CONDA_PREFIX)/bin/python
 PIP_PACKAGE:=$(CONDA_PACKAGE)/$(PRJ_PACKAGE).egg-link
 
-## ---------------------------------------------------------------------------------------
-.PHONY : help \
-	configure \
-	prepare \
-	requirements \
-	nltk-database spacy-database \
-	upgrade-venv upgrade-$(VENV) \
-	add_nbconvert_to_git nbconvert \
-	clean-notebooks notebook \
-	clean clean-all clean-venv clean-$(VENV) clean-pip clean-pyc \
-	remove-kernel remove-venv remove-$(VENV) \
-	test \
-	ec2-*
-
 .DEFAULT: help
 
-help: ## Print all majors target
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' Makefile | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(cyan)%-20s$(normal) %s\n", $$1, $$2}'
-	printf "$(cyan)%-20s$(normal) %s\n" "build-<dir>" "Execute scripts in scripts/<dir>\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "'build-*'" "Execute all scripts\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "nbbuild-<dir>" "Execute notebooks in notebooks/<dir>\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "'nbbuild-*'" "Execute all notebooks\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "ec2-<target>" "Apply <target> receipt on EC2 instance\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "ec2-tmux-<target>" "Apply <target> receipt on EC2 instance with tmux activated\n"
-	printf "$(cyan)%-20s$(normal) %s\n" "ec2-detach-<target>" "Apply <target> receipt on EC2 instance and detach the shell\n"
+.PHONY: help
+## Print all majors target
+help:
+	@echo "$(bold)Available rules:$(normal)"
+	@echo
+	@sed -n -e "/^## / { \
+		h; \
+		s/.*//; \
+		:doc" \
+		-e "H; \
+		n; \
+		s/^## //; \
+		t doc" \
+		-e "s/:.*//; \
+		G; \
+		s/\\n## /---/; \
+		s/\\n/ /g; \
+		p; \
+	}" ${MAKEFILE_LIST} \
+	| LC_ALL='C' sort --ignore-case \
+	| awk -F '---' \
+		-v ncol=$$(tput cols) \
+		-v indent=20 \
+		-v col_on="$$(tput setaf 6)" \
+		-v col_off="$$(tput sgr0)" \
+	'{ \
+		printf "%s%*s%s ", col_on, -indent, $$1, col_off; \
+		n = split($$2, words, " "); \
+		line_length = ncol - indent; \
+		for (i = 1; i <= n; i++) { \
+			line_length -= length(words[i]) + 1; \
+			if (line_length <= 0) { \
+				line_length = ncol - indent - length(words[i]) - 1; \
+				printf "\n%*s ", -indent, " "; \
+			} \
+			printf "%s ", words[i]; \
+		} \
+		printf "\n"; \
+	}' \
+	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')
+
 	echo -e "Use '$(cyan)make -jn ...$(normal)' for Parallel run"
 	echo -e "Use '$(cyan)make -B ...$(normal)' to force the target"
 	echo -e "Use '$(cyan)make -n ...$(normal)' to simulate the build"
@@ -86,6 +96,7 @@ dump-%:
 .git:
 	@git init
 
+.PHONY: pipe_clear_jupyter_output
 # Purge notebook for git. Used by .gitattribute
 pipe_clear_jupyter_output:
 	jupyter nbconvert --to notebook --ClearOutputPreprocessor.enabled=True <(cat <&0) --stdout 2>/dev/null
@@ -108,15 +119,6 @@ endif
 
 	@echo ".gitattributes updated"
 
-## ---------------------------------------------------------------------------------------
-# SNIPPET pour vérifier la présence d'un environnement Conda conforme
-# avant le lancement d'un traitement.
-# Il faut ajouter $(VALIDATE_VENV) dans les recettes
-# et choisir la version à appliquer.
-# Soit :
-# - CHECK_VENV pour vérifier l'activation d'un VENV avant de commencer
-# - VALIDATE_VENV pour vérifier l'activation du VENV
-
 CHECK_VENV=@if [[ "base" == "$(CONDA_DEFAULT_ENV)" ]] || [[ -z "$(CONDA_DEFAULT_ENV)" ]] ; \
   then ( echo -e "$(green)Use: $(cyan)conda activate $(VENV)$(green) before using 'make'$(normal)"; exit 1 ) ; fi
 
@@ -127,6 +129,7 @@ VALIDATE_VENV=$(CHECK_VENV)
 
 JUPYTER_DATA_DIR:=$(shell jupyter --data-dir 2>/dev/null || echo "~/.local/share/jupyter")
 
+.PHONY: requirements
 REQUIREMENTS= \
 		$(PIP_PACKAGE) \
 		.gitattributes
@@ -146,44 +149,42 @@ $(JUPYTER_DATA_DIR)/kernels/$(KERNEL): $(PIP_PACKAGE)
 	$(VALIDATE_VENV)
 	python -m ipykernel install --user --name $(KERNEL)
 
-configure: ## Prepare the environment (conda venv, kernel, ...)
+.PHONY: configure
+## Prepare the environment (conda venv, kernel, ...)
+configure:
 	@conda create --name "$(VENV)" python=$(PYTHON_VERSION) -y
 	echo -e "Use: $(cyan)conda activate $(VENV)$(normal)"
 
-remove-venv remove-$(VENV): ## Remove venv
-	@$(DEACTIVATE_VENV)
-	conda env remove --name "$(VENV)" -y
-	echo -e "Use: $(cyan)conda deactivate$(normal)"
-
-## ---------------------------------------------------------------------------------------
-# SNIPPET pour executer jupyter notebook, mais en s'assurant de la bonne application des dépendances.
-# Utilisez 'make notebook' à la place de 'jupyter notebook'.
+.PHONY: notebook
 notebook: $(REQUIREMENTS) $(JUPYTER_DATA_DIR)/kernels/$(KERNEL) ## Start jupyter notebooks
 	$(VALIDATE_VENV)
 	jupyter notebook
 
+.PHONY: clean-pyc clean-notebooks clean-pip clean-venv clean clean-all
 clean-pyc: # Clean pre-compiled files
 	-/usr/bin/find . -name '*.pyc' -exec rm -f {} +
 	-/usr/bin/find . -name '*.pyo' -exec rm -f {} +
-
-clean-notebooks: ## Remove all results of notebooks
+clean-notebooks:
 	@[ -e notebooks ] && find notebooks -name '*.ipynb' -exec jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace {} \;
 	@echo "Notebooks cleaned"
-clean-pip: ## Remove all the pip package
+clean-pip:
 	$(VALIDATE_VENV)
 	pip freeze | grep -v "^-e" | xargs pip uninstall -y
-
-clean-venv clean-$(VENV): remove-venv ## Set the current VENV empty
+clean-venv clean-$(VENV): remove-venv
 	@echo -e "$(cyan)Re-create virtualenv $(VENV)...$(normal)"
 	conda create -y -q -n $(VENV)
 	touch setup.py
 	echo -e "$(yellow)Warning: Conda virtualenv $(VENV) is empty.$(normal)"
 
-clean: clean-pyc clean-notebooks ## Clean current environment
+## Clean current environment
+clean: clean-pyc clean-notebooks
 
-clean-all: clean remove-venv remove-kernel ## Clean all environments
+## Clean all environments
+clean-all: clean remove-venv remove-kernel
 
-test: requirements ## Run all tests
+.PHONY: test
+## Run all tests
+test: requirements
 	$(VALIDATE_VENV)
 	python -m unittest discover -s tests -b
 
@@ -214,6 +215,7 @@ endef
 #EC2_LIFE_CYCLE=--terminate
 EC2_LIFE_CYCLE=--leave
 
+.PHONY: ec2-*
 # Recette permettant un 'make ec2-test'
 ec2-%: ## call make recipe on EC2
 	$(VALIDATE_VENV)
@@ -236,25 +238,40 @@ ec2-notebook: ## Start jupyter notebook on EC2
 	$(VALIDATE_VENV)
 	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 
-# Recette pour lancer ssh-ec2 avec les paramètres AWS du Makefile (`make ec2-ssh`)
-ec2-ssh: ## Start ssh session on EC2 with parameters in current Makefile
-	ssh-ec2 --leave
-
 ## ---------------------------------------------------------------------------------------
 #TARGET_INSTALL:=~/.local/bin
 TARGET_INSTALL:=/usr/local/bin
-install: uninstall ## Installe une copie de ssh-ec2 dans /usr/local/bin
+.PHONY: install install-with-ln uninstall
+## Installe une copie de ssh-ec2 dans /usr/local/bin
+install: uninstall
 	@sudo cp ssh-ec2 $(TARGET_INSTALL)
 	@sudo chmod go+rx $(TARGET_INSTALL)/ssh-ec2
 	@echo "ssh-ec2 is installed in '$(TARGET_INSTALL)'"
 	@which ssh-ec2 >/dev/null || echo "$(red)Add '$(TARGET_INSTALL)' at the begin of 'PATH' in your .bashrc ou .zshrc"
 
-install-with-ln: uninstall ## Installe dans /usr/local/bin, un lien vers le source de ssh-ec2
+## Installe dans /usr/local/bin, un lien vers le source de ssh-ec2
+install-with-ln: uninstall
 	@sudo ln -s $(shell pwd)/ssh-ec2 $(TARGET_INSTALL)/ssh-ec2
 	@echo "ssh-ec2 is installed in '$(TARGET_INSTALL)'."
 	@which ssh-ec2 >/dev/null || echo "$(red)Add '$(TARGET_INSTALL)' at the begin of 'PATH' in your .bashrc ou .zshrc"
 
-uninstall: ## Supprime de /usr/local/bin
+## Supprime de /usr/local/bin
+uninstall:
 	@sudo rm -f $(TARGET_INSTALL)/ssh-ec2
 
+.PHONY: validate
+validate-frankfurt:
+	AWS_REGION=eu-central-1 ssh-ec2 :
+
+validate-ireland:
+	AWS_REGION=eu-west-1 ssh-ec2 :
+
+validate-london: # FIXME: Bug avec cette région uniquement
+	AWS_REGION=eu-west-2 ssh-ec2 :
+
+validate-paris:
+	AWS_REGION=eu-west-3 ssh-ec2 :
+
+## Validate ssh-ec2 on all Europe
+validate-regions: validate-frankfurt validate-ireland validate-london validate-paris
 
