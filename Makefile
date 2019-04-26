@@ -188,7 +188,7 @@ test: requirements
 	$(VALIDATE_VENV)
 	python -m unittest discover -s tests -b
 
-## ---------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------
 # SNIPPET pour ajouter la capacité d'exécuter des recettes sur une instance éphémère EC2.
 # L'utilisation de `requirements` dans chaque règle, permet de s'assurer de la bonne
 # mise en place de l'environnement nécessaire à l'exécution de la recette,
@@ -238,8 +238,8 @@ ec2-notebook: ## Start jupyter notebook on EC2
 	$(VALIDATE_VENV)
 	ssh-ec2 --stop -L 8888:localhost:8888 "jupyter notebook --NotebookApp.open_browser=False"
 
-## ---------------------------------------------------------------------------------------
-#TARGET_INSTALL:=~/.local/bin
+# ---------------------------------------------------------------------------------------
+# TARGET_INSTALL:=~/.local/bin
 TARGET_INSTALL:=/usr/local/bin
 .PHONY: install install-with-ln uninstall
 ## Installe une copie de ssh-ec2 dans /usr/local/bin
