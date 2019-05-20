@@ -81,14 +81,16 @@ Vous devez avoir reçu un fichier de la DSI avec:
 ```bash
 # Etape 1: A copier, ajuster et executer dans un shell
 export TRIGRAM=_mon trigrame_' # /!\ _mon trigrame_ est a ajuster !
+
 # Etape 2: A copier et executer dans un shell
 [ $OSTYPE == 'linux-gnu' ] && RC=~/.bashrc
 [ $OSTYPE == darwin* ] && RC=~/.bash_profile
 [ -e ~/.zshrc ] && RC=~/.zshrc
-echo export TRIGRAM=$TRIGRAM >>${RC}_X 
+echo export TRIGRAM=$TRIGRAM >>${RC} 
 source ${RC}   # Important pour la suite.
 ```
 - installer le [CLI AWS](https://tinyurl.com/yd4ru2nu)
+
 ```bash
 $ pip3 install awscli --upgrade --user
 $ aws --version
@@ -110,6 +112,10 @@ Default region name [None]:
 Default output format [None]: json
 ```
 Ces clés d'API permettront d'utiliser `aws cli` dans `ssh-ec2`
+Pour le vérifier :
+```bash
+$ aws s3 ls
+```
 
 - Créer une [pair de clé SSH](https://docs.aws.amazon.com/fr_fr/AWSEC2/latest/UserGuide/ec2-key-pairs.html)
 Elle servira à se connecter aux instances EC2 créées. Elle doit absolument être installé dans les différentes
@@ -117,7 +123,7 @@ régions d'AWS pour permettre la connexion aux instances.
 Attention, ne pas confondre la pair de clé SSH avec l'authentification à la console AWS ou avec les clés d'Api.
 
 ```
-$ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 2048
+$ ssh-keygen -f ~/.ssh/$TRIGRAM -t rsa -b 4096
 Generating public/private ecdsa key pair.
 Enter passphrase (empty for no passphrase):
 Enter same passphrase again:
@@ -142,6 +148,7 @@ The key's randomart image is:
 - Récupérer la clé publique
 ```bash
 $ ssh-keygen -f ~/.ssh/$TRIGRAM -y
+
 Enter passphrase:
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQDI4u+M0rW2/yKAMqXtJVsPEzH3O1tSIXRkDKoMLvJFiw/uAEkgHagfjuTd
 EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7+2CDAkQ8prv7Tg9D
@@ -151,7 +158,7 @@ EStGm5JcYLXKIuWULPUwt5RNpfClOScm3dC1+a3Z0eALDIr9b2LY3zjhFzAMlaeGcfMickiiuS3oQTn7
 - Ouvrir la [console AWS](https://eu-central-1.signin.aws.amazon.com) et se logger avec l'email
 et le mot de passe recu de la DSI
 - Dans le service *EC2*, menu *Réseau et sécurité* / *Pair de clés*,
-importez la pair de clé SSH avec le nom du trigram dans les différentes régions
+importez la pair de clé SSH avec le nom du trigram en majuscule dans les différentes régions
 que vous souhaitez utiliser (Probablement toute l'europe, à sélectionner en haut à droite).
 
 ![ImportKeyPair](https://gitlab.octo.com/pprados/ssh-ec2/raw/master/img/ImportKeyPair.png?raw=true "ImportKeyPair")
@@ -403,7 +410,7 @@ tous les traitement sur AWS. Consultez le fichier [Makefile](https://gitlab.octo
 ```bash
 ec2-%: ## call make recipe on EC2
 	$(VALIDATE_VENV)
-	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
+	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; LC_ALL="en_US.UTF-8" VENV=$(VENV_AWS) make $(*:ec2-%=%)"
 ...
 ```
 Avec ces règles, il suffit de préfixer les recettes d'origine pour les exécuter

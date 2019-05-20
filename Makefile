@@ -219,19 +219,19 @@ EC2_LIFE_CYCLE=--leave
 # Recette permettant un 'make ec2-test'
 ec2-%: ## call make recipe on EC2
 	$(VALIDATE_VENV)
-	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-%=%)"
+	ssh-ec2 $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; LC_ALL="en_US.UTF-8" VENV=$(VENV_AWS) make $(*:ec2-%=%)"
 
 # Recette permettant d'exécuter une recette avec un tmux activé.
 # Par exemple `make ec2-tmux-train`
 ec2-tmux-%: ## call make recipe on EC2 with a tmux session
 	$(VALIDATE_VENV)
-	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-tmux-%=%)"
+	NO_RSYNC_END=n ssh-ec2 --multi tmux --leave "source activate $(VENV_AWS) ; LC_ALL="en_US.UTF-8" VENV=$(VENV_AWS) make $(*:ec2-tmux-%=%)"
 
 # Recette permettant un 'make ec2-detach-test'
 # Il faut faire un ssh-ec2 --finish pour rapatrier les résultats à la fin
 ec2-detach-%: ## call make recipe on EC2 and detach immediatly
 	$(VALIDATE_VENV)
-	ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; VENV=$(VENV_AWS) make $(*:ec2-detach-%=%)"
+	ssh-ec2 --detach $(EC2_LIFE_CYCLE) "source activate $(VENV_AWS) ; LC_ALL="en_US.UTF-8" VENV=$(VENV_AWS) make $(*:ec2-detach-%=%)"
 
 # Recette pour lancer un jupyter notebook sur EC2
 ec2-notebook: ## Start jupyter notebook on EC2
