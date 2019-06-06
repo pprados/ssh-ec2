@@ -475,6 +475,7 @@ function finish() {
                     AWS_FINAL_STATE=leave
                     echo -e "${red}WARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active${normal}"
                 else
+                    echo "AWS_FINAL_STATE=$AWS_FINAL_STATE"
                     echo -e "${red}WARNING: The AWS EC instance ${AWS_NAME_INSTANCE} is alive${normal}" >&2
                 fi
                 ;;
@@ -556,6 +557,7 @@ if [[ -z "$AWS_INSTANCE_ID" ]]; then
       --instance-initiated-shutdown-behavior ${shutdown_mode} \
       --user-data ${USER_DATA} \
       --output text --query 'Instances[*].InstanceId')
+    [[ "${DEBUG}" == y ]] && set +x
     if [[ -z "${AWS_INSTANCE_ID}" ]] ; then
         echo -e "${red}ERROR${normal}: Impossible to create instance" >&2
         exit 1
@@ -594,6 +596,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
     echo -e "Synchronizes current directory (except files in .rsyncignore)... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE="-v"
     # TODO: use file and add with --exclude-from ???
+    [[ "${DEBUG}" == y ]] && set -x
     echo $EXCLUDE | xargs rsync -vz -r \
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
@@ -602,6 +605,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
       --update \
       ${RSYNC_QUIET} \
       --copy-links
+    [[ "${DEBUG}" == y ]] && set +x
 else
     echo -e "${yellow}Warning: No rsync (other ssh-ec2 session ?)${normal}"
 fi
@@ -669,6 +673,7 @@ fi
 if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
     echo -e "Synchronizes result... \c"
     [[ -e .rsyncignore ]] && EXCLUDE=$(sed -E 's/^(.*)/ --exclude '\''\1'\''/' .rsyncignore) || EXCLUDE="-v"
+    [[ "${DEBUG}" == y ]] && set -x
     echo $EXCLUDE | xargs rsync -vza -r \
       -e "ssh ${PEM_SSH} -o StrictHostKeyChecking=no -o LogLevel=quiet" \
       ${AWS_HOST}:~/${AWS_RSYNC_DIR}/ ./ \
@@ -676,6 +681,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_END}" ]] ; then
       --update \
       $([ "$AWS_DRY" != "" ] && echo "-n" ) \
       --ignore-times
+    [[ "${DEBUG}" == y ]] && set +x
     echo -e "done"
 else
     echo -e "${yellow}Warning: No rsync${normal}"

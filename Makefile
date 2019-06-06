@@ -212,8 +212,8 @@ sudo su - ec2-user -c "conda install -n $(VENV_AWS) make>=4 -y"
 endef
 
 # Quel est le cycle de vie par défaut des instances, via ssh-ec2 ?
-#EC2_LIFE_CYCLE=--terminate
-EC2_LIFE_CYCLE=--leave
+EC2_LIFE_CYCLE=--terminate
+#EC2_LIFE_CYCLE=--leave
 
 .PHONY: ec2-*
 # Recette permettant un 'make ec2-test'

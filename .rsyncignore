@@ -1,0 +1,9 @@
+.git
+.idea
+.eggs
+.pytest_cache
+*.egg-info
+build
+data/interim
+dist
+docs
