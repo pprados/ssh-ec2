@@ -68,10 +68,10 @@ $ ssh-ec2 # Create EC2 instance, duplicate directory, start ssh, synchronize res
 ```
 
 ## Pré-requis sur AWS pour l'utilisateur
-Voir [user.md]
+Voir [utilisatuer](user.md)
 
 ## Pré-requis sur AWS pour l'administrateur
-Voir [admin.md]
+Voir [administrateur](admin.md)
 
 ## Utilisation
 Le programme est paramétrable via la ligne de commande ou à l'aide de variables d'environements.

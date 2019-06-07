@@ -475,7 +475,6 @@ function finish() {
                     AWS_FINAL_STATE=leave
                     echo -e "${red}WARNING: Another connexion to EC2 instance is alive. The AWS EC instance is active${normal}"
                 else
-                    echo "AWS_FINAL_STATE=$AWS_FINAL_STATE"
                     echo -e "${red}WARNING: The AWS EC instance ${AWS_NAME_INSTANCE} is alive${normal}" >&2
                 fi
                 ;;
