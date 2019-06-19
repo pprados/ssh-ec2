@@ -26,7 +26,7 @@ source ${RC}   # Important pour la suite.
 $ pip3 install awscli --upgrade --user
 $ aws --version
 ```
-- vérifiez d'avoir ~/.config/bin dans le PATH (voir `.bashrc` ou `.zshrc` ou `.bash_profile`)
+- vérifiez d'avoir `~/.config/bin` dans le PATH (voir `.bashrc` ou `.zshrc` ou `.bash_profile`)
 pour pouvoir executer `aws`
 
 ```bash

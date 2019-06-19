@@ -146,11 +146,15 @@ function arg_leave() {
 }
 
 function arg_stop() {
-    AWS_FINAL_STATE=stop
+    if [ "$SSH_DETACH" != y -a "$SSH_ATTACH" != y ] ; then
+        AWS_FINAL_STATE=stop
+    fi
 }
 
 function arg_terminate() {
-    AWS_FINAL_STATE=terminate
+    if [ "$SSH_DETACH" != y -a "$SSH_ATTACH" != y ] ; then
+        AWS_FINAL_STATE=terminate
+    fi
 }
 
 function arg_detach() {
@@ -161,6 +165,7 @@ function arg_detach() {
 
 function arg_attach() {
     MULTIPLEX=tmux
+    SSH_ATTACH=y
     AWS_FINAL_STATE=leave
     NO_RSYNC_BEGIN=y
     NO_RSYNC_END=y
@@ -200,6 +205,7 @@ function arg_verbose() {
 function arg_help() {
     echo -e "ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \\ \n" \
         "[--multi <tmux|screen|none>] \\ \n" \
+        "[-v|--verbose] \\ \n" \
         "[-i <pem file>] [-[LR] port:host:port] [cmds*]"
     echo "Samples:"
     echo "${green}ssh-ec2 make          ${gray}# Create, sync, execute, sync and terminate instance"
@@ -600,7 +606,7 @@ if [[ "$nb_of_instance" < 2 && -z "${NO_RSYNC_BEGIN}" ]] ; then
       -e "ssh ${PEM_SSH} ${AWS_DISABLE_HOST_CHECKING} -o LogLevel=quiet" \
       ./ ${AWS_HOST}:~/${AWS_RSYNC_DIR} \
       --archive \
-      --modify-window=1 \
+      --modify-window=2 \
       --update \
       ${RSYNC_QUIET} \
       --copy-links

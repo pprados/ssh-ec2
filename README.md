@@ -68,7 +68,7 @@ $ ssh-ec2 # Create EC2 instance, duplicate directory, start ssh, synchronize res
 ```
 
 ## Pré-requis sur AWS pour l'utilisateur
-Voir [utilisatuer](user.md)
+Voir [utilisateur](user.md)
 
 ## Pré-requis sur AWS pour l'administrateur
 Voir [administrateur](admin.md)
@@ -137,6 +137,7 @@ Pour avoir un rapide rappel des paramètres de la ligne de commande `--help` :
 $ ssh-ec2 --help
 ssh-ec2 [-lsr|--leave|--stop|--terminate] [-daf|--detach|--attach|--finish] [--no-rsync] \
  [--multi <tmux|screen|none>] \
+  [-v|--verbose] \
  [-i <pem file>] [-[LR] port:host:port] [cmds*]
 ```
 
